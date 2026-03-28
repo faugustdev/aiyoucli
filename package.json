@@ -1,0 +1,55 @@
+{
+  "name": "aiyoucli",
+  "version": "0.1.0",
+  "description": "AI agent CLI with Rust-powered vector intelligence",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "aiyoucli": "./bin/aiyoucli.js",
+    "aiyoucli-mcp": "./bin/aiyoucli-mcp.js"
+  },
+  "scripts": {
+    "build:rs": "napi build --platform --release --package aiyoucli-napi",
+    "build:ts": "tsc",
+    "build": "npm run build:rs && npm run build:ts",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist/ *.node"
+  },
+  "napi": {
+    "binaryName": "aiyoucli-napi",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "files": [
+    "bin/**",
+    "dist/**",
+    "*.node"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/faugustdev/aiyoucli.git"
+  },
+  "author": {
+    "name": "Francisco August",
+    "email": "support@faugust.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0-alpha",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
