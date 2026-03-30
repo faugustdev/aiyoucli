@@ -11,6 +11,7 @@ import { registerAllTools } from "../mcp/tools/index.js";
 import { startMCPServer } from "../mcp/server.js";
 import { generateAgentsMd } from "../init/agentsmd-generator.js";
 import { generateSettings } from "../init/settings-generator.js";
+import { interactiveInit } from "../init/interactive.js";
 import { renderStatusline, generateStatuslineScript } from "../statusline/generator.js";
 import type { Command, MCPToolResult } from "../types.js";
 
@@ -53,9 +54,10 @@ function printJson(result: MCPToolResult): void {
 
 const initCommand: Command = {
   name: "init",
-  description: "Initialize project (AGENTS.md, settings)",
+  description: "Initialize project (AGENTS.md, settings, skills)",
   options: [
     { name: "force", short: "f", description: "Overwrite existing files", type: "boolean" },
+    { name: "skip-skills", description: "Skip interactive skills setup", type: "boolean" },
   ],
   action: async (ctx) => {
     const cwd = ctx.cwd;
@@ -90,6 +92,17 @@ const initCommand: Command = {
     for (const path of created) {
       output.log(`  ${color.green("+")} ${path.replace(cwd + "/", "")}`);
     }
+
+    // Interactive skills setup (if terminal is interactive)
+    if (!ctx.flags["skip-skills"] && ctx.interactive) {
+      try {
+        const skillPaths = await interactiveInit(cwd);
+        created.push(...skillPaths);
+      } catch {
+        // Non-critical — skills are optional
+      }
+    }
+
     output.log("");
     return { success: true };
   },

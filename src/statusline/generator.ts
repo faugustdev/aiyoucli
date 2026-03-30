@@ -172,28 +172,37 @@ function collect(cwd: string): Data {
   };
 }
 
-// ── Compact format (plain text for Claude Code statusLine) ──────
+// ── Compact format (ANSI colors for Claude Code statusLine) ─────
 
 function formatCompact(d: Data): string {
-  const parts: string[] = [`aiyoucli`];
+  const R = "\x1b[0m";
+  const B = "\x1b[1m";
+  const ind = "\x1b[38;5;105m";  // indigo
+  const tl = "\x1b[38;5;73m";   // teal
+  const wm = "\x1b[38;5;216m";  // warm peach
+  const gn = "\x1b[38;5;114m";  // soft green
+  const yl = "\x1b[38;5;222m";  // soft yellow
+  const gy = "\x1b[38;5;245m";  // gray
+
+  const parts: string[] = [`${B}${ind}■ aiyoucli${R}`];
 
   if (d.branch) {
-    let git = d.branch;
-    if (d.staged > 0) git += ` +${d.staged}`;
-    if (d.modified > 0) git += ` ~${d.modified}`;
+    let git = `${wm}${d.branch}${R}`;
+    if (d.staged > 0) git += ` ${gn}+${d.staged}${R}`;
+    if (d.modified > 0) git += `${yl}~${d.modified}${R}`;
     parts.push(git);
   }
 
-  if (d.agents > 0) parts.push(`${d.agents} agents`);
+  if (d.agents > 0) parts.push(`${tl}${d.agents}${R} agents`);
 
   const totalTasks = d.tasks.p + d.tasks.r + d.tasks.c;
-  if (totalTasks > 0) parts.push(`${d.tasks.r}r/${d.tasks.c}d/${d.tasks.p}q tasks`);
+  if (totalTasks > 0) parts.push(`${yl}${d.tasks.r}${R}r ${gn}${d.tasks.c}${R}d ${gy}${d.tasks.p}${R}q`);
 
-  if (d.vectors > 0) parts.push(`${d.vectors} vectors`);
+  if (d.vectors > 0) parts.push(`${tl}${d.vectors}${R} vecs`);
 
-  parts.push(`${d.tools} tools`);
+  parts.push(`${gy}${d.tools} tools${R}`);
 
-  return parts.join(" | ");
+  return parts.join(` ${gy}│${R} `);
 }
 
 // ── Format (new palette: indigo/teal/warm) ──────────────────────
