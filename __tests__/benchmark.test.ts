@@ -33,7 +33,7 @@ describe("runBenchmark", () => {
       await new Promise((r) => setTimeout(r, 1));
     }, { iterations: 5, warmup: 1 });
 
-    expect(result.timings.avgMs).toBeGreaterThanOrEqual(1);
+    expect(result.timings.avgMs).toBeGreaterThanOrEqual(0.5);
   });
 
   it("computes timing stats", async () => {

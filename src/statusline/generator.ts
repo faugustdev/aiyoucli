@@ -9,6 +9,8 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSy
 import { join, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
+import { registry } from "../mcp/client.js";
+import { registerAllTools } from "../mcp/tools/index.js";
 
 // ── Public API ──────────────────────────────────────────────────
 
@@ -26,7 +28,7 @@ export function renderStatusline(
 ): string {
   const data = collect(cwd);
   if (options.json) return JSON.stringify(data, null, 2);
-  if (options.compact) return JSON.stringify(data);
+  if (options.compact) return formatCompact(data);
   return format(data);
 }
 
@@ -49,6 +51,19 @@ interface Data {
   vectors: number;
   tests: number;
   tools: number;
+}
+
+let _toolCount: number | null = null;
+function getToolCount(): number {
+  if (_toolCount === null) {
+    try {
+      registerAllTools();
+      _toolCount = registry.list().length;
+    } catch {
+      _toolCount = 51;
+    }
+  }
+  return _toolCount;
 }
 
 function collect(cwd: string): Data {
@@ -153,8 +168,32 @@ function collect(cwd: string): Data {
       topology: swarmData?.topology ?? "off",
       max: swarmData?.maxAgents ?? 8,
     },
-    tasks, vectors, tests, tools: 41,
+    tasks, vectors, tests, tools: getToolCount(),
   };
+}
+
+// ── Compact format (plain text for Claude Code statusLine) ──────
+
+function formatCompact(d: Data): string {
+  const parts: string[] = [`aiyoucli`];
+
+  if (d.branch) {
+    let git = d.branch;
+    if (d.staged > 0) git += ` +${d.staged}`;
+    if (d.modified > 0) git += ` ~${d.modified}`;
+    parts.push(git);
+  }
+
+  if (d.agents > 0) parts.push(`${d.agents} agents`);
+
+  const totalTasks = d.tasks.p + d.tasks.r + d.tasks.c;
+  if (totalTasks > 0) parts.push(`${d.tasks.r}r/${d.tasks.c}d/${d.tasks.p}q tasks`);
+
+  if (d.vectors > 0) parts.push(`${d.vectors} vectors`);
+
+  parts.push(`${d.tools} tools`);
+
+  return parts.join(" | ");
 }
 
 // ── Format (new palette: indigo/teal/warm) ──────────────────────

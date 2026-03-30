@@ -170,7 +170,12 @@ impl AnalysisEngine {
     /// Returns a 0.0-1.0 score where higher = more complex.
     #[napi]
     pub fn complexity_score(&self, source: String) -> f64 {
-        let lines: Vec<&str> = source.lines().collect();
+        // Normalize: expand single-line code so nesting/branch detection works
+        let normalized = source
+            .replace('{', "{\n")
+            .replace('}', "\n}\n")
+            .replace(';', ";\n");
+        let lines: Vec<&str> = normalized.lines().collect();
         let total_lines = lines.len() as f64;
         if total_lines == 0.0 {
             return 0.0;
@@ -193,10 +198,14 @@ impl AnalysisEngine {
 
             // Branches (cyclomatic complexity proxy)
             if trimmed.starts_with("if ")
+                || trimmed.starts_with("if(")
                 || trimmed.starts_with("else ")
+                || trimmed.starts_with("else{")
                 || trimmed.starts_with("case ")
                 || trimmed.starts_with("for ")
+                || trimmed.starts_with("for(")
                 || trimmed.starts_with("while ")
+                || trimmed.starts_with("while(")
                 || trimmed.contains("? ")
                 || trimmed.contains("catch")
                 || trimmed.contains("&&")
