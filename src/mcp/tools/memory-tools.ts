@@ -1,16 +1,48 @@
 /**
  * Memory tools — vector store/search/list via NAPI (aiyouvector-core).
+ * Persistent by default: stores vectors at .aiyoucli/vectors/ and config at .aiyoucli/memory-config.json.
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
 import { inMemoryVectorDB, openVectorDB, type VectorHandle } from "../../napi/index.js";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
+const AIYOUCLI_DIR = join(process.cwd(), ".aiyoucli");
+const CONFIG_PATH = join(AIYOUCLI_DIR, "memory-config.json");
+const DEFAULT_VECTORS_PATH = join(AIYOUCLI_DIR, "vectors.redb");
+
+interface MemoryConfig {
+  path: string | null;
+  dimensions: number;
+  hnsw: boolean;
+}
+
+function loadConfig(): MemoryConfig {
+  if (existsSync(CONFIG_PATH)) {
+    try {
+      return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+    } catch { /* fall through */ }
+  }
+  return { path: DEFAULT_VECTORS_PATH, dimensions: 384, hnsw: true };
+}
+
+function saveConfig(config: MemoryConfig): void {
+  mkdirSync(AIYOUCLI_DIR, { recursive: true });
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+}
 
 let db: VectorHandle | null = null;
 
 function getDB(): VectorHandle {
   if (!db) {
-    // Default: in-memory with HNSW enabled
-    db = inMemoryVectorDB(384, true);
+    const config = loadConfig();
+    if (config.path) {
+      mkdirSync(AIYOUCLI_DIR, { recursive: true });
+      db = openVectorDB(config.path, config.dimensions);
+    } else {
+      db = inMemoryVectorDB(config.dimensions, config.hnsw);
+    }
   }
   return db;
 }
@@ -26,28 +58,32 @@ function jsonResult(data: unknown): MCPToolResult {
 export const memoryTools: MCPTool[] = [
   {
     name: "memory_init",
-    description: "Initialize the vector memory database",
+    description: "Initialize the vector memory database. Persistent by default (stored in .aiyoucli/vectors/).",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Storage path (omit for in-memory)" },
+        path: { type: "string", description: "Storage path (default: .aiyoucli/vectors/). Use 'memory' for in-memory only." },
         dimensions: { type: "number", description: "Vector dimensions (default: 384)" },
         enable_hnsw: { type: "boolean", description: "Enable HNSW index (default: true)" },
       },
     },
     handler: async (input) => {
-      const path = input.path as string | undefined;
+      const rawPath = input.path as string | undefined;
       const dims = (input.dimensions as number) ?? 384;
       const hnsw = (input.enable_hnsw as boolean) ?? true;
 
-      if (path) {
-        db = openVectorDB(path, dims);
-      } else {
-        db = inMemoryVectorDB(dims, hnsw);
-      }
+      const isMemoryOnly = rawPath === "memory";
+      const storagePath = isMemoryOnly ? null : (rawPath ?? DEFAULT_VECTORS_PATH);
+
+      const config: MemoryConfig = { path: storagePath, dimensions: dims, hnsw };
+      saveConfig(config);
+
+      // Reset singleton so next getDB() picks up new config
+      db = null;
 
       const indexType = hnsw ? "HNSW" : "flat";
-      return textResult(`Memory initialized (${path ?? "in-memory"}, ${dims}d, ${indexType})`);
+      const location = isMemoryOnly ? "in-memory" : storagePath;
+      return textResult(`Memory initialized (${location}, ${dims}d, ${indexType})`);
     },
   },
 

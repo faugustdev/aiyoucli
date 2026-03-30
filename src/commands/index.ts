@@ -99,7 +99,7 @@ const initCommand: Command = {
 
 const agentCommand: Command = {
   name: "agent",
-  description: "Agent lifecycle (spawn, list, stop)",
+  description: "Agent lifecycle (spawn, list, stop, record, metrics)",
   subcommands: [
     {
       name: "spawn",
@@ -154,6 +154,36 @@ const agentCommand: Command = {
         if (!id) { output.error("Agent ID required: --id <id>"); return; }
         const result = await callTool("agent_stop", { id });
         printResult(result);
+      },
+    },
+    {
+      name: "record",
+      description: "Record a task outcome for an agent",
+      options: [
+        { name: "id", description: "Agent ID", type: "string", required: true },
+        { name: "success", description: "Task succeeded (true/false)", type: "string", required: true },
+        { name: "duration-ms", description: "Task duration in ms", type: "number" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const id = ctx.flags.id || ctx.args[0];
+        if (!id) { output.error("Agent ID required: --id <id>"); return; }
+        const success = String(ctx.flags.success ?? ctx.args[1]).toLowerCase() === "true";
+        const result = await callTool("agent_record", {
+          id,
+          success,
+          duration_ms: ctx.flags["duration-ms"] ?? 0,
+        });
+        printJson(result);
+      },
+    },
+    {
+      name: "metrics",
+      description: "Get aggregated metrics across all agents",
+      action: async () => {
+        ensureTools();
+        const result = await callTool("agent_metrics", {});
+        printJson(result);
       },
     },
   ],
@@ -237,7 +267,8 @@ const memoryCommand: Command = {
         ensureTools();
         const raw = (ctx.flags.vector as string) || ctx.args[0];
         if (!raw) { output.error("Vector required: --vector '1.0,2.0,3.0'"); return; }
-        const vector = String(raw).split(",").map(Number);
+        const cleaned = String(raw).replace(/[\[\]\s]/g, "");
+        const vector = cleaned.split(",").map(Number);
         const result = await callTool("memory_store", {
           vector,
           id: ctx.flags.id,
@@ -256,7 +287,8 @@ const memoryCommand: Command = {
         ensureTools();
         const raw = (ctx.flags.vector as string) || ctx.args[0];
         if (!raw) { output.error("Query vector required: --vector '1.0,2.0,3.0'"); return; }
-        const vector = String(raw).split(",").map(Number);
+        const cleaned = String(raw).replace(/[\[\]\s]/g, "");
+        const vector = cleaned.split(",").map(Number);
         const result = await callTool("memory_search", {
           vector,
           k: ctx.flags.k || 5,
