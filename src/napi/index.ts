@@ -22,6 +22,20 @@ interface NapiBindings {
   AnalysisEngine: AnalysisEngineConstructor;
   distillMarkdown: (markdown: string) => string;
   distillFile: (path: string) => string;
+  detectTechnologies: (projectDir: string) => DetectResult;
+}
+
+export interface DetectResult {
+  detected: Array<{
+    id: string;
+    name: string;
+    category: string;
+    skills: string[];
+  }>;
+  categories: string[];
+  skills: string[];
+  total_technologies: number;
+  total_skills: number;
 }
 
 interface VectorHandleClass {
@@ -255,4 +269,11 @@ export function distillMarkdown(markdown: string): string {
  */
 export function distillFile(path: string): string {
   return getBindings().distillFile(path);
+}
+
+/**
+ * Detect technologies in a project directory.
+ */
+export function detectTechnologies(projectDir: string): DetectResult {
+  return getBindings().detectTechnologies(projectDir);
 }
