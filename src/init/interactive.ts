@@ -82,15 +82,18 @@ async function installSkill(skillPath: string): Promise<boolean> {
 // ── TOON distillation of installed skills ────────────────────────
 
 function distillInstalledSkills(projectRoot: string): string[] {
-  const skillsDir = join(projectRoot, ".claude", "skills");
-  if (!existsSync(skillsDir)) return [];
+  // Skills live in .agents/skills/ with symlinks in .claude/skills/
+  const agentsSkillsDir = join(projectRoot, ".agents", "skills");
+  const claudeSkillsDir = join(projectRoot, ".claude", "skills");
+  const searchDir = existsSync(agentsSkillsDir) ? agentsSkillsDir : claudeSkillsDir;
+  if (!existsSync(searchDir)) return [];
 
   const distilled: string[] = [];
   const toonDir = join(projectRoot, ".aiyoucli", "skills");
   mkdirSync(toonDir, { recursive: true });
 
   try {
-    const entries = readDirRecursive(skillsDir);
+    const entries = readDirRecursive(searchDir);
     for (const entry of entries) {
       if (!entry.endsWith("SKILL.md")) continue;
 
