@@ -11,6 +11,7 @@ import { writeFileSync, existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { generateStatuslineScript } from "../statusline/generator.js";
+import { distillMarkdown } from "../napi/index.js";
 
 interface SettingsResult {
   path: string;
@@ -75,63 +76,23 @@ function buildClaudeSettings(): object {
 // ── CLAUDE.md ──────────────────────────────────────────────────
 
 function buildClaudeMd(name: string, author: { name: string; email: string }): string {
-  return `# Claude Code — ${name}
+  return `@.aiyoucli/agents.dsi.toon
 
-See AGENTS.md for project instructions.
-
-## Author
-
-All commits and PRs should be authored by:
-\`\`\`
-${author.name} <${author.email}>
-\`\`\`
-
-## MCP Server
-
-This project uses aiyoucli as an MCP server (51 tools).
-Configured in \`.mcp.json\`.
-
-Available tools: memory, agents, swarm, tasks, sessions, hooks, config, analysis, neural, routing, metrics, and more.
-Run \`aiyoucli mcp tools\` to see the full list.
-
-## Statusline
-
-Rich status dashboard via statusline hook in \`.claude/settings.json\`.
-To regenerate: \`aiyoucli statusline --generate\`
+Commits: ${author.name} <${author.email}>
+MCP: aiyoucli-mcp (configured in .mcp.json)
+Build: npm install && npm run build
+Test: npm test
 `;
 }
 
 // ── GEMINI.md ──────────────────────────────────────────────────
 
 function buildGeminiMd(name: string, author: { name: string; email: string }): string {
-  return `# Gemini CLI — ${name}
+  return `See .aiyoucli/agents.dsi.toon for project instructions (dense format).
 
-See AGENTS.md for project instructions.
-
-## Author
-
-All commits and PRs should be authored by:
-\`\`\`
-${author.name} <${author.email}>
-\`\`\`
-
-## MCP Server
-
-This project uses aiyoucli as an MCP server (51 tools).
-
-\`\`\`bash
-aiyoucli-mcp
-\`\`\`
-
-## Available tools
-
-Run \`aiyoucli mcp tools\` to see all 51 MCP tools:
-memory, agents, swarm, tasks, sessions, hooks, config, analysis, neural, routing, metrics, and more.
-
-## Statusline
-
-View project status: \`aiyoucli statusline\`
-JSON output: \`aiyoucli statusline --json\`
+Commits: ${author.name} <${author.email}>
+MCP: aiyoucli-mcp
+Status: aiyoucli statusline
 `;
 }
 
@@ -180,6 +141,21 @@ export async function generateSettings(projectRoot: string): Promise<string[]> {
   // 5. Statusline script
   const statuslinePath = generateStatuslineScript(projectRoot);
   paths.push(statuslinePath);
+
+  // 6. DSI TOON — distill AGENTS.md if it exists
+  const agentsMdPath = join(projectRoot, "AGENTS.md");
+  if (existsSync(agentsMdPath)) {
+    try {
+      const md = readFileSync(agentsMdPath, "utf-8");
+      const toon = distillMarkdown(md);
+      const toonPath = join(projectRoot, ".aiyoucli", "agents.dsi.toon");
+      mkdirSync(dirname(toonPath), { recursive: true });
+      writeFileSync(toonPath, toon, "utf-8");
+      paths.push(toonPath);
+    } catch {
+      // Non-critical — NAPI might not be available in all environments
+    }
+  }
 
   return paths;
 }
