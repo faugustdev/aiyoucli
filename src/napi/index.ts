@@ -20,6 +20,8 @@ interface NapiBindings {
   GraphHandle: GraphHandleConstructor;
   RoutingEngine: RoutingEngineConstructor;
   AnalysisEngine: AnalysisEngineConstructor;
+  distillMarkdown: (markdown: string) => string;
+  distillFile: (path: string) => string;
 }
 
 interface VectorHandleClass {
@@ -236,4 +238,21 @@ export interface AnalysisEngine {
 
 export function createAnalysisEngine(): AnalysisEngine {
   return new (getBindings().AnalysisEngine)();
+}
+
+// ── Distiller ────────────────────────────────────────────────────
+
+/**
+ * Distill Markdown into TOON format (Dense Structured Instructions).
+ * ~52% fewer tokens for the same semantic content.
+ */
+export function distillMarkdown(markdown: string): string {
+  return getBindings().distillMarkdown(markdown);
+}
+
+/**
+ * Distill a Markdown file into TOON format. Reads file and returns TOON string.
+ */
+export function distillFile(path: string): string {
+  return getBindings().distillFile(path);
 }

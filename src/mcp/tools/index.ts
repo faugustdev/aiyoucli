@@ -19,6 +19,7 @@ import { performanceTools } from "./performance-tools.js";
 import { coordinationTools } from "./coordination-tools.js";
 import { statuslineTools } from "./statusline-tools.js";
 import { metricsTools } from "./metrics-tools.js";
+import { distillerTools } from "./distiller-tools.js";
 
 export function registerAllTools(): void {
   registry.registerAll(memoryTools);
@@ -37,4 +38,5 @@ export function registerAllTools(): void {
   registry.registerAll(coordinationTools);
   registry.registerAll(statuslineTools);
   registry.registerAll(metricsTools);
+  registry.registerAll(distillerTools);
 }
