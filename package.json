@@ -13,7 +13,7 @@
     "access": "public"
   },
   "scripts": {
-    "build:rs": "napi build --platform --release --package aiyoucli-napi",
+    "build:rs": "napi build --platform --release --package aiyoucli-napi -o .",
     "build:ts": "tsc",
     "build": "npm run build:rs && npm run build:ts",
     "dev": "tsc --watch",
