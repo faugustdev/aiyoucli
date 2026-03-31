@@ -20,6 +20,7 @@ import { coordinationTools } from "./coordination-tools.js";
 import { statuslineTools } from "./statusline-tools.js";
 import { metricsTools } from "./metrics-tools.js";
 import { distillerTools } from "./distiller-tools.js";
+import { skillsTools } from "./skills-tools.js";
 
 export function registerAllTools(): void {
   registry.registerAll(memoryTools);
@@ -39,4 +40,5 @@ export function registerAllTools(): void {
   registry.registerAll(statuslineTools);
   registry.registerAll(metricsTools);
   registry.registerAll(distillerTools);
+  registry.registerAll(skillsTools);
 }

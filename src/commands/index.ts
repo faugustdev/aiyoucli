@@ -909,6 +909,42 @@ const statuslineCommand: Command = {
   },
 };
 
+// ── 22. skills ────────────────────────────────────────────────────
+
+const skillsCommand: Command = {
+  name: "skills",
+  description: "Manage project skills (sync, list)",
+  subcommands: [
+    {
+      name: "sync",
+      description: "Detect new skills, distill to TOON, clean MDs",
+      action: async (ctx) => {
+        ensureTools();
+        const result = await callTool("skills_sync", { project_dir: ctx.cwd });
+        printResult(result);
+      },
+    },
+    {
+      name: "list",
+      description: "List installed TOON skills",
+      action: async (ctx) => {
+        ensureTools();
+        const result = await callTool("skills_list", { project_dir: ctx.cwd });
+        printJson(result);
+      },
+    },
+    {
+      name: "detect",
+      description: "Detect project technologies",
+      action: async (ctx) => {
+        ensureTools();
+        const result = await callTool("skills_detect", { project_dir: ctx.cwd });
+        printJson(result);
+      },
+    },
+  ],
+};
+
 // ── Export ──────────────────────────────────────────────────────────
 
 export const commands: Command[] = [
@@ -933,4 +969,5 @@ export const commands: Command[] = [
   updateCommand,
   performanceCommand,
   statuslineCommand,
+  skillsCommand,
 ];
