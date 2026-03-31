@@ -21,7 +21,7 @@ jobs:
             host: macos-14
             platform: darwin-arm64
           - target: x86_64-apple-darwin
-            host: macos-13
+            host: macos-14
             platform: darwin-x64
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-latest
@@ -41,7 +41,19 @@ jobs:
         with:
           repository: faugustdev/aiyouvector
           token: ${{ secrets.AIYOUVECTOR_TOKEN }}
-          path: ../aiyouvector
+          path: _aiyouvector
+
+      # Cargo.toml uses path = "../../../aiyouvector/crates/..."
+      # From crates/aiyoucli-napi/, 3 levels up = workspace parent
+      # Create symlink so the path resolves
+      - name: Link aiyouvector for Cargo path deps (Unix)
+        if: runner.os != 'Windows'
+        run: ln -s "$GITHUB_WORKSPACE/_aiyouvector" "$GITHUB_WORKSPACE/../aiyouvector"
+
+      - name: Link aiyouvector for Cargo path deps (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: mklink /D "%GITHUB_WORKSPACE%\..\aiyouvector" "%GITHUB_WORKSPACE%\_aiyouvector"
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -49,7 +61,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm install
@@ -74,7 +86,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: []
     steps:
       - uses: actions/checkout@v4
 
@@ -82,13 +93,16 @@ jobs:
         with:
           repository: faugustdev/aiyouvector
           token: ${{ secrets.AIYOUVECTOR_TOKEN }}
-          path: ../aiyouvector
+          path: _aiyouvector
+
+      - name: Link aiyouvector for Cargo path deps
+        run: ln -s "$GITHUB_WORKSPACE/_aiyouvector" "$GITHUB_WORKSPACE/../aiyouvector"
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm install
@@ -105,7 +119,10 @@ jobs:
         with:
           repository: faugustdev/aiyouvector
           token: ${{ secrets.AIYOUVECTOR_TOKEN }}
-          path: ../aiyouvector
+          path: _aiyouvector
+
+      - name: Link aiyouvector for Cargo path deps
+        run: ln -s "$GITHUB_WORKSPACE/_aiyouvector" "$GITHUB_WORKSPACE/../aiyouvector"
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
@@ -123,7 +140,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
 
