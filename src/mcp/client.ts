@@ -46,6 +46,23 @@ class ToolRegistry {
     }));
   }
 
+  private validateInput(tool: MCPTool, input: Record<string, unknown>): string | null {
+    const schema = tool.inputSchema;
+    if (schema.required) {
+      for (const key of schema.required) {
+        if (!(key in input) || input[key] === undefined) {
+          return `Missing required parameter: ${key}`;
+        }
+      }
+    }
+    for (const key of Object.keys(input)) {
+      if (!(key in schema.properties)) {
+        return `Unknown parameter: ${key}`;
+      }
+    }
+    return null;
+  }
+
   async call(
     name: string,
     input: Record<string, unknown>
@@ -54,6 +71,14 @@ class ToolRegistry {
     if (!tool) {
       return {
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
+        isError: true,
+      };
+    }
+
+    const validationError = this.validateInput(tool, input);
+    if (validationError) {
+      return {
+        content: [{ type: "text", text: `Validation error: ${validationError}` }],
         isError: true,
       };
     }

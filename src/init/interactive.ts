@@ -6,7 +6,7 @@
 import { createInterface } from "node:readline";
 import { execSync, spawn } from "node:child_process";
 import { join, dirname } from "node:path";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, lstatSync, rmSync } from "node:fs";
 import { detectTechnologies, distillMarkdown, type DetectResult } from "../napi/index.js";
 import { output, color } from "../output.js";
 
@@ -121,7 +121,7 @@ function readDirRecursive(dir: string): string[] {
   const results: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
+    if (lstatSync(full).isDirectory()) {
       results.push(...readDirRecursive(full));
     } else {
       results.push(full);

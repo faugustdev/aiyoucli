@@ -36,14 +36,14 @@ export function handleError(error: unknown): HandledError {
 
   if (error instanceof Error) {
     return {
-      message: error.message,
+      message: "Internal error",
       code: "INTERNAL_ERROR",
       exitCode: 10,
     };
   }
 
   return {
-    message: String(error),
+    message: "Unknown error",
     code: "UNKNOWN_ERROR",
     exitCode: 1,
   };

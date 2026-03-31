@@ -47,8 +47,12 @@ export const configTools: MCPTool[] = [
       required: ["key", "value"],
     },
     handler: async (input) => {
+      const BANNED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
       const config = loadConfig() as unknown as Record<string, unknown>;
       const keys = (input.key as string).split(".");
+      for (const k of keys) {
+        if (BANNED_KEYS.has(k)) throw new Error(`Forbidden key segment: ${k}`);
+      }
       let obj = config;
       for (let i = 0; i < keys.length - 1; i++) {
         if (!(keys[i] in obj)) (obj as Record<string, unknown>)[keys[i]] = {};

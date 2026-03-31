@@ -5,6 +5,16 @@
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
 import { distillMarkdown, distillFile } from "../../napi/index.js";
+import { resolve } from "node:path";
+import { realpathSync, existsSync } from "node:fs";
+
+function assertWithinCwd(filePath: string): void {
+  const resolved = existsSync(filePath) ? realpathSync(resolve(filePath)) : resolve(filePath);
+  const cwd = realpathSync(process.cwd());
+  if (!resolved.startsWith(cwd + "/") && resolved !== cwd) {
+    throw new Error(`Path must be within project root: ${resolved}`);
+  }
+}
 
 function text(t: string): MCPToolResult { return { content: [{ type: "text", text: t }] }; }
 
@@ -35,7 +45,9 @@ export const distillerTools: MCPTool[] = [
       required: ["path"],
     },
     handler: async (input) => {
-      const result = distillFile(input.path as string);
+      const path = input.path as string;
+      assertWithinCwd(path);
+      const result = distillFile(path);
       return text(result);
     },
   },

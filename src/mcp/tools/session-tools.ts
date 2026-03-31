@@ -16,7 +16,8 @@ interface Session {
   metadata: Record<string, unknown>;
 }
 
-function sessionPath(id: string): string { return join(SESSIONS_DIR, `${id}.json`); }
+function sanitizeId(id: string): string { return id.replace(/[^a-zA-Z0-9_-]/g, "_"); }
+function sessionPath(id: string): string { return join(SESSIONS_DIR, `${sanitizeId(id)}.json`); }
 
 function loadSession(id: string): Session | null {
   const path = sessionPath(id);

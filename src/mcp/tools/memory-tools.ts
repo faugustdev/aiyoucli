@@ -6,7 +6,7 @@
 import type { MCPTool, MCPToolResult } from "../../types.js";
 import { inMemoryVectorDB, openVectorDB, type VectorHandle } from "../../napi/index.js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const AIYOUCLI_DIR = join(process.cwd(), ".aiyoucli");
 const CONFIG_PATH = join(AIYOUCLI_DIR, "memory-config.json");
@@ -73,6 +73,13 @@ export const memoryTools: MCPTool[] = [
       const hnsw = (input.enable_hnsw as boolean) ?? true;
 
       const isMemoryOnly = rawPath === "memory";
+      if (rawPath && !isMemoryOnly) {
+        const resolved = resolve(rawPath);
+        const allowedDir = resolve(AIYOUCLI_DIR);
+        if (!resolved.startsWith(allowedDir + "/") && resolved !== allowedDir) {
+          throw new Error(`Storage path must be within .aiyoucli/: ${resolved}`);
+        }
+      }
       const storagePath = isMemoryOnly ? null : (rawPath ?? DEFAULT_VECTORS_PATH);
 
       const config: MemoryConfig = { path: storagePath, dimensions: dims, hnsw };
@@ -104,6 +111,10 @@ export const memoryTools: MCPTool[] = [
       const id = input.id as string | undefined;
       const metadata = input.metadata as Record<string, unknown> | undefined;
 
+      const config = loadConfig();
+      if (vector.length !== config.dimensions) {
+        throw new Error(`Vector has ${vector.length} dimensions, expected ${config.dimensions}`);
+      }
       const resultId = getDB().insert(vector, id, metadata ? JSON.parse(JSON.stringify(metadata)) : undefined);
       return textResult(`Stored vector: ${resultId}`);
     },
@@ -122,7 +133,7 @@ export const memoryTools: MCPTool[] = [
     },
     handler: async (input) => {
       const vector = input.vector as number[];
-      const k = (input.k as number) ?? 5;
+      const k = Math.min(Math.max((input.k as number) ?? 5, 1), 1000);
 
       const results = getDB().search(vector, k);
       return jsonResult(results);

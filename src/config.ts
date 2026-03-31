@@ -84,14 +84,20 @@ function applyEnvOverrides(config: Config): Config {
     config.memory.backend = env.AIYOUCLI_MEMORY_BACKEND as Config["memory"]["backend"];
   if (env.AIYOUCLI_MEMORY_PATH)
     config.memory.storagePath = env.AIYOUCLI_MEMORY_PATH;
-  if (env.AIYOUCLI_MEMORY_DIMENSIONS)
-    config.memory.dimensions = parseInt(env.AIYOUCLI_MEMORY_DIMENSIONS, 10);
+  if (env.AIYOUCLI_MEMORY_DIMENSIONS) {
+    const v = parseInt(env.AIYOUCLI_MEMORY_DIMENSIONS, 10);
+    if (!Number.isNaN(v) && v > 0) config.memory.dimensions = v;
+  }
   if (env.AIYOUCLI_SWARM_TOPOLOGY)
     config.swarm.topology = env.AIYOUCLI_SWARM_TOPOLOGY as Config["swarm"]["topology"];
-  if (env.AIYOUCLI_SWARM_MAX_AGENTS)
-    config.swarm.maxAgents = parseInt(env.AIYOUCLI_SWARM_MAX_AGENTS, 10);
-  if (env.AIYOUCLI_MCP_PORT)
-    config.mcp.port = parseInt(env.AIYOUCLI_MCP_PORT, 10);
+  if (env.AIYOUCLI_SWARM_MAX_AGENTS) {
+    const v = parseInt(env.AIYOUCLI_SWARM_MAX_AGENTS, 10);
+    if (!Number.isNaN(v) && v > 0) config.swarm.maxAgents = v;
+  }
+  if (env.AIYOUCLI_MCP_PORT) {
+    const v = parseInt(env.AIYOUCLI_MCP_PORT, 10);
+    if (!Number.isNaN(v) && v > 0) config.mcp.port = v;
+  }
   if (env.AIYOUCLI_VERBOSITY)
     config.cli.verbosity = env.AIYOUCLI_VERBOSITY as Config["cli"]["verbosity"];
   if (env.NO_COLOR) config.cli.color = false;

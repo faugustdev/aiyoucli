@@ -32,3 +32,6 @@ npm/*/*.node
 .aiyoucli/
 .mcp.json
 firebase-debug.log
+
+# Test artifacts
+prueba/

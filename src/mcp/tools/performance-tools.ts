@@ -20,9 +20,9 @@ export const performanceTools: MCPTool[] = [
       },
     },
     handler: async (input) => {
-      const numVectors = (input.vectors as number) || 1000;
-      const dims = (input.dimensions as number) || 128;
-      const numQueries = (input.queries as number) || 100;
+      const numVectors = Math.min(Math.max((input.vectors as number) || 1000, 1), 100_000);
+      const dims = Math.min(Math.max((input.dimensions as number) || 128, 1), 4096);
+      const numQueries = Math.min(Math.max((input.queries as number) || 100, 1), 10_000);
 
       const db = inMemoryVectorDB(dims);
 

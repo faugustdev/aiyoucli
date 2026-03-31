@@ -9,9 +9,17 @@ import type { MCPTool, MCPToolResult } from "../../types.js";
 import { distillMarkdown, detectTechnologies } from "../../napi/index.js";
 import {
   existsSync, mkdirSync, writeFileSync, readFileSync,
-  readdirSync, statSync, rmSync,
+  readdirSync, lstatSync, rmSync, realpathSync,
 } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
+
+function assertWithinCwd(dir: string): void {
+  const resolved = existsSync(dir) ? realpathSync(resolve(dir)) : resolve(dir);
+  const cwd = realpathSync(process.cwd());
+  if (!resolved.startsWith(cwd + "/") && resolved !== cwd) {
+    throw new Error(`Path must be within project root: ${resolved}`);
+  }
+}
 
 function text(t: string): MCPToolResult { return { content: [{ type: "text", text: t }] }; }
 function json(d: unknown): MCPToolResult { return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] }; }
@@ -22,7 +30,7 @@ function findSkillMds(dir: string): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (entry.startsWith(".")) continue;
-    if (statSync(full).isDirectory()) {
+    if (lstatSync(full).isDirectory()) {
       results.push(...findSkillMds(full));
     } else if (entry === "SKILL.md") {
       results.push(full);
@@ -43,6 +51,7 @@ export const skillsTools: MCPTool[] = [
     },
     handler: async (input) => {
       const projectDir = (input.project_dir as string) || process.cwd();
+      assertWithinCwd(projectDir);
       const toonDir = join(projectDir, ".aiyoucli", "skills");
       mkdirSync(toonDir, { recursive: true });
 
@@ -129,6 +138,7 @@ export const skillsTools: MCPTool[] = [
     },
     handler: async (input) => {
       const projectDir = (input.project_dir as string) || process.cwd();
+      assertWithinCwd(projectDir);
       const toonDir = join(projectDir, ".aiyoucli", "skills");
 
       if (!existsSync(toonDir)) return json({ skills: [], total: 0 });
@@ -137,7 +147,7 @@ export const skillsTools: MCPTool[] = [
         .filter((f) => f.endsWith(".dsi.toon"))
         .map((f) => {
           const fullPath = join(toonDir, f);
-          const size = statSync(fullPath).size;
+          const size = lstatSync(fullPath).size;
           return {
             name: f.replace(".dsi.toon", ""),
             file: f,
@@ -160,6 +170,7 @@ export const skillsTools: MCPTool[] = [
     },
     handler: async (input) => {
       const projectDir = (input.project_dir as string) || process.cwd();
+      assertWithinCwd(projectDir);
       return json(detectTechnologies(projectDir));
     },
   },
