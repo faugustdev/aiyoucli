@@ -202,23 +202,42 @@ jobs:
         run: |
           for dir in npm/*/; do
             if [ -f "$dir/package.json" ] && ls "$dir"/*.node 1>/dev/null 2>&1; then
-              echo "Publishing $(basename $dir)..."
-              cd "$dir"
-              npm publish --provenance --access public
-              cd ../..
+              PKG_NAME=$(node -p "require('./$dir/package.json').name")
+              PKG_VERSION=$(node -p "require('./$dir/package.json').version")
+              if npm view "${PKG_NAME}@${PKG_VERSION}" version 2>/dev/null; then
+                echo "Skipping ${PKG_NAME}@${PKG_VERSION} (already published)"
+              else
+                echo "Publishing ${PKG_NAME}@${PKG_VERSION}..."
+                cd "$dir"
+                npm publish --provenance --access public
+                cd ../..
+              fi
             fi
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @aiyou-dev/cli
-        run: npm publish --provenance --access public
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "${PKG_NAME}@${PKG_VERSION}" version 2>/dev/null; then
+            echo "Skipping ${PKG_NAME}@${PKG_VERSION} (already published)"
+          else
+            npm publish --provenance --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish aiyoucli wrapper
         run: |
           cd packages/aiyoucli
-          npm publish --provenance --access public
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "${PKG_NAME}@${PKG_VERSION}" version 2>/dev/null; then
+            echo "Skipping ${PKG_NAME}@${PKG_VERSION} (already published)"
+          else
+            npm publish --provenance --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
