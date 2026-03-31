@@ -23,7 +23,8 @@ describe("VectorDB (NAPI)", () => {
   });
 
   it("searches nearest neighbors", () => {
-    const db = inMemoryVectorDB(3);
+    // Use flat index (not HNSW) for exact results with few vectors
+    const db = inMemoryVectorDB(3, false);
     db.insert([1.0, 0.0, 0.0], "vec-x");
     db.insert([0.0, 1.0, 0.0], "vec-y");
     db.insert([0.0, 0.0, 1.0], "vec-z");
