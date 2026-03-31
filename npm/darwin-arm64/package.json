@@ -1,0 +1,22 @@
+{
+  "name": "@aiyou-dev/cli-darwin-arm64",
+  "version": "0.1.0",
+  "description": "aiyoucli native binding for macOS ARM64",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "aiyoucli-napi.darwin-arm64.node",
+  "files": [
+    "aiyoucli-napi.darwin-arm64.node"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

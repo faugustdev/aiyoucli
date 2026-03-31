@@ -1,0 +1,25 @@
+{
+  "name": "aiyoucli",
+  "version": "0.1.0",
+  "description": "AI agent CLI with Rust-powered vector intelligence",
+  "type": "module",
+  "bin": {
+    "aiyoucli": "./bin/aiyoucli.js",
+    "aiyoucli-mcp": "./bin/aiyoucli-mcp.js"
+  },
+  "dependencies": {
+    "@aiyou-dev/cli": "^0.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Francisco August",
+    "email": "support@faugust.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/faugustdev/aiyoucli.git"
+  }
+}

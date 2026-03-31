@@ -1,0 +1,22 @@
+{
+  "name": "@aiyou-dev/cli-win32-x64-msvc",
+  "version": "0.1.0",
+  "description": "aiyoucli native binding for Windows x64 (MSVC)",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "aiyoucli-napi.win32-x64-msvc.node",
+  "files": [
+    "aiyoucli-napi.win32-x64-msvc.node"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "aiyoucli",
+  "name": "@aiyou-dev/cli",
   "version": "0.1.0",
   "description": "AI agent CLI with Rust-powered vector intelligence",
   "type": "module",
@@ -8,6 +8,9 @@
   "bin": {
     "aiyoucli": "./bin/aiyoucli.js",
     "aiyoucli-mcp": "./bin/aiyoucli-mcp.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build:rs": "napi build --platform --release --package aiyoucli-napi",
@@ -29,10 +32,16 @@
       "x86_64-pc-windows-msvc"
     ]
   },
+  "optionalDependencies": {
+    "@aiyou-dev/cli-darwin-arm64": "0.1.0",
+    "@aiyou-dev/cli-darwin-x64": "0.1.0",
+    "@aiyou-dev/cli-linux-x64-gnu": "0.1.0",
+    "@aiyou-dev/cli-linux-arm64-gnu": "0.1.0",
+    "@aiyou-dev/cli-win32-x64-msvc": "0.1.0"
+  },
   "files": [
     "bin/**",
-    "dist/**",
-    "*.node"
+    "dist/**"
   ],
   "engines": {
     "node": ">=20.0.0"

@@ -1,0 +1,22 @@
+{
+  "name": "@aiyou-dev/cli-linux-arm64-gnu",
+  "version": "0.1.0",
+  "description": "aiyoucli native binding for Linux ARM64 (glibc)",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "aiyoucli-napi.linux-arm64-gnu.node",
+  "files": [
+    "aiyoucli-napi.linux-arm64-gnu.node"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

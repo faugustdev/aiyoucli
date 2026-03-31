@@ -1,0 +1,22 @@
+{
+  "name": "@aiyou-dev/cli-linux-x64-gnu",
+  "version": "0.1.0",
+  "description": "aiyoucli native binding for Linux x64 (glibc)",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "aiyoucli-napi.linux-x64-gnu.node",
+  "files": [
+    "aiyoucli-napi.linux-x64-gnu.node"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

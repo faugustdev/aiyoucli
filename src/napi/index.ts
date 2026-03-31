@@ -66,6 +66,24 @@ export interface DbStats {
   storage_bytes: number;
 }
 
+const PLATFORM_MAP: Record<string, Record<string, string>> = {
+  darwin: {
+    arm64: "@aiyou-dev/cli-darwin-arm64",
+    x64: "@aiyou-dev/cli-darwin-x64",
+  },
+  linux: {
+    x64: "@aiyou-dev/cli-linux-x64-gnu",
+    arm64: "@aiyou-dev/cli-linux-arm64-gnu",
+  },
+  win32: {
+    x64: "@aiyou-dev/cli-win32-x64-msvc",
+  },
+};
+
+function getPlatformPackage(): string | undefined {
+  return PLATFORM_MAP[process.platform]?.[process.arch];
+}
+
 function loadBindings(): NapiBindings {
   // Try loading from the workspace root (development: cargo build output)
   const candidates = [
@@ -83,11 +101,14 @@ function loadBindings(): NapiBindings {
     }
   }
 
-  // Try loading as npm package (production: platform-specific package)
-  try {
-    return require("aiyoucli-napi") as NapiBindings;
-  } catch {
-    // ignore
+  // Try loading platform-specific npm package (production)
+  const platformPackage = getPlatformPackage();
+  if (platformPackage) {
+    try {
+      return require(platformPackage) as NapiBindings;
+    } catch {
+      // ignore
+    }
   }
 
   throw new Error(
