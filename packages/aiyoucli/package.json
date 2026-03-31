@@ -1,5 +1,5 @@
 {
-  "name": "aiyoucli",
+  "name": "@aiyou-dev/aiyoucli",
   "version": "0.1.0",
   "description": "AI agent CLI with Rust-powered vector intelligence",
   "type": "module",
@@ -12,6 +12,9 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "MIT",
   "author": {
