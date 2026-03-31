@@ -6,7 +6,7 @@
 import { createInterface } from "node:readline";
 import { execSync, spawn } from "node:child_process";
 import { join, dirname } from "node:path";
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { detectTechnologies, distillMarkdown, type DetectResult } from "../napi/index.js";
 import { output, color } from "../output.js";
 
@@ -97,22 +97,27 @@ function distillInstalledSkills(projectRoot: string): string[] {
     for (const entry of entries) {
       if (!entry.endsWith("SKILL.md")) continue;
 
-      const content = readFileSync(entry, "utf-8");
-      const toon = distillMarkdown(content);
-      const name = dirname(entry).split("/").pop() ?? "unknown";
-      const toonPath = join(toonDir, `${name}.dsi.toon`);
-      writeFileSync(toonPath, toon);
-      distilled.push(toonPath);
+      try {
+        const content = readFileSync(entry, "utf-8");
+        const toon = distillMarkdown(content);
+        const name = dirname(entry).split("/").pop() ?? "unknown";
+        const toonPath = join(toonDir, `${name}.dsi.toon`);
+        writeFileSync(toonPath, toon);
+        distilled.push(toonPath);
+      } catch (e) {
+        // Log individual skill errors but continue
+        const name = dirname(entry).split("/").pop() ?? "unknown";
+        console.error(`  Warning: Failed to distill ${name}: ${e instanceof Error ? e.message : e}`);
+      }
     }
-  } catch {
-    // Non-critical
+  } catch (e) {
+    console.error(`  Warning: Failed to scan skills: ${e instanceof Error ? e.message : e}`);
   }
 
   return distilled;
 }
 
 function readDirRecursive(dir: string): string[] {
-  const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
   const results: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
@@ -123,6 +128,31 @@ function readDirRecursive(dir: string): string[] {
     }
   }
   return results;
+}
+
+// ── Cleanup original MD skills ───────────────────────────────────
+
+function cleanupOriginalSkills(projectRoot: string): void {
+  // Remove .claude/skills/ (symlinks to MD)
+  const claudeSkills = join(projectRoot, ".claude", "skills");
+  if (existsSync(claudeSkills)) {
+    rmSync(claudeSkills, { recursive: true, force: true });
+  }
+
+  // Remove .agents/skills/ (original MD files)
+  const agentsSkills = join(projectRoot, ".agents", "skills");
+  if (existsSync(agentsSkills)) {
+    rmSync(agentsSkills, { recursive: true, force: true });
+  }
+
+  // Remove .agents/ if empty
+  const agentsDir = join(projectRoot, ".agents");
+  if (existsSync(agentsDir)) {
+    try {
+      const entries = readdirSync(agentsDir).filter((e) => !e.startsWith("."));
+      if (entries.length === 0) rmSync(agentsDir, { recursive: true, force: true });
+    } catch {}
+  }
 }
 
 // ── Generate path-based rules ────────────────────────────────────
@@ -179,18 +209,14 @@ function generateRules(
     },
   };
 
-  // Map distilled skills to categories based on detected technologies
+  // Map skills to categories by matching tech → skill relationship
+  const techToSkills: Record<string, string[]> = {};
   for (const tech of detected) {
-    const rule = ruleMap[tech.category];
-    if (!rule) continue;
-
-    for (const dp of distilledPaths) {
-      const filename = dp.split("/").pop() ?? "";
-      // Match skill to tech by checking if the toon file relates to this tech
-      if (filename.toLowerCase().includes(tech.id) || tech.skills.some((s) => filename.includes(s.split("/").pop() ?? ""))) {
-        if (!rule.toonFiles.includes(dp)) {
-          rule.toonFiles.push(dp);
-        }
+    for (const skill of tech.skills) {
+      const skillName = skill.split("/").pop() ?? "";
+      const toonMatch = distilledPaths.find((p) => p.includes(skillName));
+      if (toonMatch) {
+        (techToSkills[tech.category] ??= []).push(toonMatch);
       }
     }
   }
@@ -200,25 +226,24 @@ function generateRules(
   for (const [category, rule] of Object.entries(ruleMap)) {
     if (!activeCategories.has(category)) continue;
 
-    const relativeToonPaths = rule.toonFiles.map((p) =>
-      p.replace(projectRoot + "/", "")
-    );
+    const toonPaths = [...new Set(techToSkills[category] ?? [])];
+    const relativePaths = toonPaths.map((p) => p.replace(projectRoot + "/", ""));
 
     let content = `---\npaths:\n`;
     for (const p of rule.paths) {
       content += `  - "${p}"\n`;
     }
     content += `---\n\n`;
-    content += `# ${rule.name} rules\n\n`;
 
-    if (relativeToonPaths.length > 0) {
-      content += `Load skills:\n`;
-      for (const tp of relativeToonPaths) {
+    // Import TOON skills relevant to this category
+    if (relativePaths.length > 0) {
+      for (const tp of relativePaths) {
         content += `@${tp}\n`;
       }
-    } else {
-      content += `Category: ${category}\nDetected: ${detected.filter((t) => t.category === category).map((t) => t.name).join(", ")}\n`;
     }
+
+    content += `\nDetected: ${detected.filter((t) => t.category === category).map((t) => t.name).join(", ")}\n`;
+    content += `Use .aiyoucli/skills/*.dsi.toon for detailed guidance.\n`;
 
     writeFileSync(join(rulesDir, `${rule.name}.md`), content);
   }
@@ -293,13 +318,17 @@ export async function interactiveInit(projectRoot: string): Promise<string[]> {
         distilledSpinner.stop();
 
         if (distilled.length > 0) {
-          console.log(`  ${color.green("Distilled")} ${distilled.length} skills to TOON (${color.dim("-52% tokens")})`);
+          console.log(`  ${color.green("Distilled")} ${distilled.length} skills to TOON (${color.dim("optimized for AI")})`);
           paths.push(...distilled);
         }
 
-        // 5. Generate path-based rules
+        // 5. Remove original MD skills (TOON replaces them)
+        cleanupOriginalSkills(projectRoot);
+        console.log(`  ${color.green("Cleaned")} original .md skills (TOON replaces them)`);
+
+        // 6. Generate path-based rules pointing to TOON
         generateRules(result.detected, distilled, projectRoot);
-        console.log(`  ${color.green("Generated")} .claude/rules/ (on-demand loading)`);
+        console.log(`  ${color.green("Generated")} .claude/rules/ → .aiyoucli/skills/*.dsi.toon`);
       }
     }
   }
