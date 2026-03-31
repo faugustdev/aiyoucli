@@ -193,6 +193,8 @@ function formatCompact(d: Data): string {
     parts.push(git);
   }
 
+  if (d.model) parts.push(`${ind}${d.model}${R}`);
+
   if (d.agents > 0) parts.push(`${tl}${d.agents}${R} agents`);
 
   const totalTasks = d.tasks.p + d.tasks.r + d.tasks.c;
