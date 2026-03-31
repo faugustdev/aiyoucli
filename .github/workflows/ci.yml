@@ -179,6 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -203,7 +204,7 @@ jobs:
             if [ -f "$dir/package.json" ] && ls "$dir"/*.node 1>/dev/null 2>&1; then
               echo "Publishing $(basename $dir)..."
               cd "$dir"
-              npm publish --access public
+              npm publish --provenance --access public
               cd ../..
             fi
           done
@@ -211,13 +212,13 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @aiyou-dev/cli
-        run: npm publish --access public
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish aiyoucli wrapper
         run: |
           cd packages/aiyoucli
-          npm publish --access public
+          npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
