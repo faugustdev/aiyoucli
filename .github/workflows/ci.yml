@@ -75,12 +75,21 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Build native module
-        run: npx napi build --platform --release --package aiyoucli-napi --target ${{ matrix.settings.target }}
+        run: |
+          npx napi build --platform --release --package aiyoucli-napi --target ${{ matrix.settings.target }}
+          ls -la *.node || ls -la **/*.node || true
+
+      - name: Find and stage .node artifact
+        shell: bash
+        run: |
+          find . -name "*.node" -not -path "./node_modules/*" -not -path "./_aiyouvector/*" | head -5
+          mkdir -p staging
+          find . -name "*.node" -not -path "./node_modules/*" -not -path "./_aiyouvector/*" -exec cp {} staging/ \;
 
       - uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.platform }}
-          path: "*.node"
+          path: staging/*.node
           if-no-files-found: error
 
   test:
@@ -107,6 +116,8 @@ jobs:
 
       - run: npm install
       - run: npm run build
+      - name: Verify native binding
+        run: ls -la *.node || echo "No .node files in root"
       - run: npm test
 
   rust-test:
