@@ -21,7 +21,11 @@ enum MdToken {
     CodeBlockStart { lang: String },
     CodeLine(String),
     CodeBlockEnd,
-    ListItem { depth: u8, text: String },
+    ListItem {
+        #[allow(dead_code)]
+        depth: u8,
+        text: String,
+    },
     Blank,
 }
 
@@ -495,6 +499,7 @@ pub fn distill_markdown(markdown: String) -> String {
 
 /// Distill a Markdown file into TOON format. Reads the file and returns TOON string.
 #[napi]
+#[allow(dead_code)]
 pub fn distill_file(path: String) -> napi::Result<String> {
     let content = std::fs::read_to_string(&path)
         .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("Read failed: {e}")))?;

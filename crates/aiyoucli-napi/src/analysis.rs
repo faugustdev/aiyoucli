@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[allow(unused_imports)]
 use napi::bindgen_prelude::*;
 use serde_json::json;
 
