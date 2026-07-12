@@ -150,10 +150,12 @@ function buildOpenCodeJson(): object {
     $schema: "https://opencode.ai/config.json",
     mcp: {
       aiyoucli: {
-        command: "aiyoucli-mcp",
-        args: [],
+        type: "local",
+        command: ["aiyoucli-mcp"],
+        enabled: true,
       },
     },
+    plugin: ["aiyou-team"],
     instructions: ["AGENTS.md"],
   };
 }

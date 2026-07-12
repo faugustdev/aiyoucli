@@ -15,6 +15,7 @@ import { interactiveInit } from "../init/interactive.js";
 import { renderStatusline, generateStatuslineScript } from "../statusline/generator.js";
 import { startInteractive, stopInteractive, showStatus } from "../models/manager.js";
 import { ask } from "../init/interactive.js";
+import { setupAiyouTeam, checkAiyouTeamStatus } from "../init/team-setup.js";
 import type { Command, MCPToolResult } from "../types.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -149,7 +150,16 @@ const initCommand: Command = {
       output.log(`  ${color.green("+")} ${path.replace(cwd + "/", "")}`);
     }
 
-    // 3. Interactive skills setup (if terminal is interactive)
+    // 3. Show aiyou-team status hint if OpenCode target
+    if (!targets || targets.includes("opencode")) {
+      const teamStatus = checkAiyouTeamStatus();
+      if (!teamStatus.installed) {
+        output.log("");
+        output.log(`  ${color.yellow("★")} aiyou-team not installed. Run ${color.cyan("aiyoucli setup")} to enable agent teams.`);
+      }
+    }
+
+    // 4. Interactive skills setup (if terminal is interactive)
     if (!ctx.flags["skip-skills"] && ctx.interactive) {
       try {
         const skillPaths = await interactiveInit(cwd);
@@ -161,6 +171,55 @@ const initCommand: Command = {
 
     output.log("");
     return { success: true };
+  },
+};
+
+// ── 1b. setup (global) ──────────────────────────────────────────────
+
+const setupCommand: Command = {
+  name: "setup",
+  description: "Global setup: install and configure aiyou-team for OpenCode",
+  options: [
+    { name: "dry-run", description: "Show what would be done without making changes", type: "boolean" },
+    { name: "verbose", short: "v", description: "Show detailed output", type: "boolean" },
+  ],
+  examples: [
+    { command: "aiyoucli setup", description: "Install and configure aiyou-team globally" },
+    { command: "aiyoucli setup --dry-run", description: "Preview what setup would do" },
+    { command: "aiyoucli setup --verbose", description: "Show detailed installation output" },
+  ],
+  action: async (ctx) => {
+    const status = checkAiyouTeamStatus();
+
+    if (status.installed) {
+      output.log(`  ${color.green("✓")} aiyou-team is already installed globally`);
+      output.log(`  Run ${color.cyan("aiyoucli init")} in a project to configure agent teams.\n`);
+      return { success: true };
+    }
+
+    const spinner = output.spinner("Setting up aiyou-team...");
+    spinner.start();
+
+    const result = await setupAiyouTeam({
+      dryRun: ctx.flags["dry-run"] as boolean,
+      verbose: ctx.flags.verbose as boolean,
+    });
+
+    if (result.setupRan) {
+      spinner.succeed("aiyou-team configured");
+      output.log(`  ${color.cyan("★")} ${result.message}`);
+      output.log(`\n  Run ${color.cyan("aiyoucli init")} in a project to enable agent teams.\n`);
+    } else if (!result.installed) {
+      spinner.fail("Failed to install aiyou-team");
+      output.log(`\n${result.message}\n`);
+    } else {
+      spinner.stop();
+      output.log(`  ${color.yellow("★")} aiyou-team installed but setup incomplete`);
+      output.log(`  ${result.message}`);
+      output.log(`  Run ${color.cyan("aiyou-team setup")} manually.\n`);
+    }
+
+    return { success: result.setupRan };
   },
 };
 
@@ -1239,6 +1298,7 @@ const skillsCommand: Command = {
 
 export const commands: Command[] = [
   initCommand,
+  setupCommand,
   agentCommand,
   swarmCommand,
   memoryCommand,
