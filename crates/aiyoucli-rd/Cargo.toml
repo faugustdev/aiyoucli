@@ -1,0 +1,25 @@
+[package]
+name = "aiyoucli-rd"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Deep Research NAPI — document processing, web search, research orchestration"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2", default-features = false, features = ["napi9", "async", "serde-json"] }
+napi-derive = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+regex = "1"
+sha2 = "0.10"
+parking_lot = "0.12"
+
+[build-dependencies]
+napi-build = "2"
