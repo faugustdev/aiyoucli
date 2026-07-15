@@ -50,9 +50,6 @@ for (const dir of readdirSync(npmDir)) {
   }
 }
 
-// Wrapper package
-updateJson("packages/aiyoucli/package.json", version);
-
 // Cargo.toml workspace version
 const cargoPath = "Cargo.toml";
 let cargo = readFileSync(cargoPath, "utf-8");

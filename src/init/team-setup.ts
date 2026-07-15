@@ -1,14 +1,14 @@
 /**
- * Team Setup — integrates aiyou-team (CrewBee fork) agent teams into OpenCode.
+ * Team Setup — integrates aiyou-team agent teams into OpenCode.
  *
  * When `aiyoucli init --tool opencode` runs, this module:
- *   1. Checks if aiyou-team is already installed globally
- *   2. If not, installs it via `npm install -g @aiyou-dev/team`
+ *   1. Detects aiyou-team CLI (npx from local dependency > global PATH)
+ *   2. If not found, installs it globally via `npm install -g @aiyou-dev/team`
  *   3. Runs `aiyou-team setup` to configure agent teams in OpenCode
  *   4. Reports what was configured
  *
- * This bridges aiyoucli's init command with the structured agent teams
- * provided by the aiyou-team fork (coding-team, general-team, wukong-team).
+ * aiyou-dev/team is bundled as a dependency of @aiyou-dev/cli.
+ * The npx resolution finds it in node_modules/.bin automatically.
  */
 
 import { spawnSync } from "node:child_process";
@@ -49,18 +49,35 @@ function runCommand(
   };
 }
 
-function detectAiyouTeamCli(): { found: boolean; version?: string } {
-  const versionResult = runCommand("aiyou-team", ["version"], "pipe");
-
-  if (versionResult.error || versionResult.status !== 0) {
-    return { found: false };
+/**
+ * Detect aiyou-team CLI availability.
+ * Priority: npx (local node_modules) > global PATH.
+ * npx resolves from node_modules/.bin when @aiyou-dev/team is a dependency.
+ */
+function detectAiyouTeamCli(): { found: boolean; version?: string; via: "npx" | "global" | "none" } {
+  // 1. Try npx (resolves from node_modules/.bin when installed as dependency)
+  const npxResult = runCommand("npx", ["aiyou-team", "version"], "pipe");
+  if (!npxResult.error && npxResult.status === 0) {
+    const version = npxResult.stdout?.trim();
+    return {
+      found: true,
+      version: version && version.length > 0 ? version : undefined,
+      via: "npx",
+    };
   }
 
-  const version = versionResult.stdout?.trim();
-  return {
-    found: true,
-    version: version && version.length > 0 ? version : undefined,
-  };
+  // 2. Try global PATH
+  const globalResult = runCommand("aiyou-team", ["version"], "pipe");
+  if (!globalResult.error && globalResult.status === 0) {
+    const version = globalResult.stdout?.trim();
+    return {
+      found: true,
+      version: version && version.length > 0 ? version : undefined,
+      via: "global",
+    };
+  }
+
+  return { found: false, via: "none" };
 }
 
 // ── Installation ───────────────────────────────────────────────────
@@ -107,7 +124,7 @@ function runAiyouTeamSetup(options: TeamSetupOptions): {
   success: boolean;
   output: string;
 } {
-  const args = ["setup"];
+  const args = ["aiyou-team", "setup"];
 
   if (options.verbose) {
     args.push("--verbose");
@@ -118,17 +135,33 @@ function runAiyouTeamSetup(options: TeamSetupOptions): {
   }
 
   try {
-    const result = spawnSync("aiyou-team", args, {
+    // Try npx first (resolves from node_modules/.bin)
+    const result = spawnSync("npx", args, {
       shell: process.platform === "win32",
       stdio: "pipe",
       timeout: 60_000,
       encoding: "utf8",
     });
 
-    const output = result.stdout || result.stderr || "";
+    const output = (result.stdout || result.stderr || "").toString().trim();
+
+    // Exit code 1 means doctor found issues, but setup still completed
+    if (result.status === 0 || (result.status === 1 && output.includes("setup completed"))) {
+      return { success: true, output };
+    }
+
+    // Fallback to global
+    const globalResult = spawnSync("aiyou-team", ["setup", ...args.slice(1)], {
+      shell: process.platform === "win32",
+      stdio: "pipe",
+      timeout: 60_000,
+      encoding: "utf8",
+    });
+
+    const globalOutput = (globalResult.stdout || globalResult.stderr || "").toString().trim();
     return {
-      success: (result.status ?? 1) === 0,
-      output: typeof output === "string" ? output.trim() : "",
+      success: (globalResult.status ?? 1) === 0 || (globalResult.status === 1 && globalOutput.includes("setup completed")),
+      output: globalOutput,
     };
   } catch {
     return { success: false, output: "" };
@@ -257,10 +290,12 @@ export async function setupAiyouTeam(
 export function checkAiyouTeamStatus(): {
   installed: boolean;
   cliAvailable: boolean;
+  via: "npx" | "global" | "none";
 } {
   const detection = detectAiyouTeamCli();
   return {
     installed: detection.found,
     cliAvailable: detection.found,
+    via: detection.via,
   };
 }

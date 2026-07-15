@@ -35,8 +35,8 @@
   "optionalDependencies": {
     "@aiyou-dev/cli-darwin-arm64": "0.1.0",
     "@aiyou-dev/cli-darwin-x64": "0.1.0",
-    "@aiyou-dev/cli-linux-x64-gnu": "0.1.0",
     "@aiyou-dev/cli-linux-arm64-gnu": "0.1.0",
+    "@aiyou-dev/cli-linux-x64-gnu": "0.1.0",
     "@aiyou-dev/cli-win32-x64-msvc": "0.1.0"
   },
   "files": [
@@ -57,8 +57,11 @@
   "license": "MIT",
   "devDependencies": {
     "@napi-rs/cli": "^3.0.0-alpha",
+    "@types/node": "^22.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "@aiyou-dev/team": "file:../aiyou-team"
   }
 }
