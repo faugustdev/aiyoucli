@@ -37,3 +37,4 @@ firebase-debug.log
 prueba/
 .agents
 .claude
+__tests__

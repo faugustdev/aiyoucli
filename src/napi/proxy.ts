@@ -1,7 +1,7 @@
 /**
- * NAPI binary loader for aiyoucli-proxy Rust crate.
+ * NAPI binary loader for ProxyEngine (consolidated into aiyoucli-napi).
  *
- * Loads the aiyoucli-proxy .node binary and re-exports
+ * Loads the aiyoucli-napi .node binary and re-exports
  * the ProxyEngine class for LLM gateway/proxy operations.
  */
 
@@ -51,6 +51,7 @@ export interface ProxyEngineHandle {
   // ── Semantic Router ──────────────────────────────
   semanticRoute(task: string): SemanticRouteResult;
   semanticRouteHybrid(task: string, embeddingScores: Record<string, number>): SemanticRouteResult;
+  semanticRouteEnhanced(task: string): SemanticRouteResult;
   semanticEmbed(text: string): number[];
   semanticStats(): SemanticRouterStats;
 }
@@ -254,10 +255,10 @@ export interface EmbeddingBatchResult {
 
 function loadProxyBindings(): ProxyEngineClass {
   const candidates = [
-    join(__dirname, "..", "..", "aiyoucli-proxy.linux-x64-gnu.node"),
-    join(__dirname, "..", "..", "aiyoucli-proxy.darwin-arm64.node"),
-    join(__dirname, "..", "..", "aiyoucli-proxy.darwin-x64.node"),
-    join(__dirname, "..", "..", "aiyoucli-proxy.node"),
+    join(__dirname, "..", "..", "aiyoucli-napi.linux-x64-gnu.node"),
+    join(__dirname, "..", "..", "aiyoucli-napi.darwin-arm64.node"),
+    join(__dirname, "..", "..", "aiyoucli-napi.darwin-x64.node"),
+    join(__dirname, "..", "..", "aiyoucli-napi.node"),
   ];
 
   for (const candidate of candidates) {
@@ -268,8 +269,8 @@ function loadProxyBindings(): ProxyEngineClass {
   }
 
   throw new Error(
-    "Failed to load aiyoucli-proxy native binding. " +
-      "Run `cargo build --release -p aiyoucli-proxy` and copy the .so to the project root."
+    "Failed to load aiyoucli-napi native binding. " +
+      "Run `npm run build:rs` to build the NAPI binary."
   );
 }
 

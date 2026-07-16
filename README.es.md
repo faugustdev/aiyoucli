@@ -432,22 +432,22 @@ Flujo interactivo: Verificación de salud MinIO → Detección de GPU → Selecc
 │                      (TypeScript)                             │
 │   25 comandos · 84 herr. MCP · middleware de producción       │
 │   Circuit breaker · Rate limiter · Retry + backoff exponencial│
-├─────────────────────────────┬────────────────────────────────┤
-│         Puente NAPI         │         Puente NAPI             │
-│    (aiyoucli-napi)          │      (aiyoucli-proxy)           │
-├─────────────────────────────┼────────────────────────────────┤
-│      Motores Rust           │      Proxy Independiente        │
-│                             │                                 │
-│  vector    HNSW + SIMD      │  Gateway routing + caché        │
-│  sona      MicroLoRA+EWC++  │  Shield + firewall              │
-│  attention 4 mecanismos     │  Compresión + segmentación      │
-│  routing   Q-learning       │  Análisis AST (6 lenguajes)     │
-│  graph     k-hop + BFS      │  Enrutamiento semántico (híbrido)│
-│  analysis  diff/commit/     │  Embedding (cliente ONNX)       │
-│            complejidad      │                                 │
-│  detector  45+ techs        │                                 │
-│  distiller formato TOON     │                                 │
-├─────────────────────────────┴────────────────────────────────┤
+├──────────────────────────────────────────────────────────────┤
+│                    Puente NAPI (binario único)                │
+│                    aiyoucli-napi (6.8MB)                      │
+├──────────────────────────────────────────────────────────────┤
+│                     Motores Rust                              │
+│                                                               │
+│  vector    HNSW + SIMD       │  Gateway routing + caché       │
+│  sona      MicroLoRA+EWC++   │  Shield + firewall             │
+│  attention 4 mecanismos      │  Compresión + segmentación     │
+│  routing   Q-learning        │  Análisis AST (6 lenguajes)    │
+│  graph     k-hop + BFS       │  Enrutamiento semántico        │
+│  analysis  diff/commit/      │  Embedding (cliente ONNX)      │
+│            complejidad       │                                 │
+│  detector  45+ techs         │                                 │
+│  distiller formato TOON      │                                 │
+├──────────────────────────────────────────────────────────────┤
 │                    aiyouvector (17 crates)                    │
 │  codebase graph · profile · embeddings · solver · gnn         │
 │  metagraph · observer · watchdog · daemon · server             │

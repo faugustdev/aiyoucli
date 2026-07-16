@@ -1,5 +1,5 @@
 /**
- * AST tools — multi-language AST analysis via aiyoucli-proxy NAPI.
+ * AST tools — multi-language AST analysis via aiyoucli-napi NAPI.
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";

@@ -1,5 +1,5 @@
 /**
- * Proxy tools — gateway, compression, shield, embedding via aiyoucli-proxy NAPI.
+ * Proxy tools — gateway, compression, shield, embedding via aiyoucli-napi NAPI.
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
@@ -30,16 +30,16 @@ function createProxyEngine() {
 export const proxyTools: MCPTool[] = [
   {
     name: "proxy_health",
-    description: "Check aiyoucli-proxy engine health status",
+    description: "Check proxy engine health status",
     inputSchema: { type: "object", properties: {} },
     handler: async () => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
-        const health = engine.health();
+        const health = engine.healthCheck();
         return json(health);
       } catch {
-        return text("aiyoucli-proxy health check failed");
+        return text("Proxy health check failed");
       }
     },
   },
@@ -57,13 +57,12 @@ export const proxyTools: MCPTool[] = [
     },
     handler: async (input) => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
-        const result = engine.chat({
-          messages: input.messages,
-          model: input.model as string | undefined,
-          maxTokens: input.max_tokens as number | undefined,
-        });
+        const result = engine.chatCompletion(
+          input.messages as Array<{ role: string; content: string }>,
+          input.model as string | undefined,
+        );
         return json(result);
       } catch (err) {
         return text(`Proxy chat error: ${err instanceof Error ? err.message : String(err)}`);
@@ -83,9 +82,10 @@ export const proxyTools: MCPTool[] = [
     },
     handler: async (input) => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
-        const result = engine.compress(input.text as string, input.target_ratio as number | undefined);
+        const messages = [{ role: "user", content: input.text as string }];
+        const result = engine.compressMessages(messages);
         return json(result);
       } catch (err) {
         return text(`Proxy compress error: ${err instanceof Error ? err.message : String(err)}`);
@@ -104,7 +104,7 @@ export const proxyTools: MCPTool[] = [
     },
     handler: async (input) => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
         const result = engine.shieldCheck(input.content as string);
         return json(result);
@@ -125,9 +125,9 @@ export const proxyTools: MCPTool[] = [
     },
     handler: async (input) => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available (embedding server may not be running)");
+      if (!engine) return text("proxy engine not available (embedding server may not be running)");
       try {
-        const result = engine.embed(input.text as string);
+        const result = engine.embedText(input.text as string);
         return json(result);
       } catch (err) {
         return text(`Proxy embed error: ${err instanceof Error ? err.message : String(err)}`);
@@ -140,7 +140,7 @@ export const proxyTools: MCPTool[] = [
     inputSchema: { type: "object", properties: {} },
     handler: async () => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
         return json(engine.cacheStats());
       } catch {
@@ -154,7 +154,7 @@ export const proxyTools: MCPTool[] = [
     inputSchema: { type: "object", properties: {} },
     handler: async () => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
         return json(engine.listModels());
       } catch {
@@ -176,9 +176,9 @@ export const proxyTools: MCPTool[] = [
     },
     handler: async (input) => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
-        return json(engine.estimateCost(
+        return json(engine.estimatedCost(
           input.model as string,
           input.input_tokens as number,
           input.output_tokens as number,
@@ -200,7 +200,7 @@ export const proxyTools: MCPTool[] = [
     },
     handler: async (input) => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
         return json(engine.analyzeText(input.text as string));
       } catch (err) {
@@ -221,9 +221,9 @@ export const proxyTools: MCPTool[] = [
     },
     handler: async (input) => {
       const engine = getProxyEngine();
-      if (!engine) return text("aiyoucli-proxy not available");
+      if (!engine) return text("proxy engine not available");
       try {
-        return json(engine.segment(input.text as string, input.max_chunk_size as number | undefined));
+        return json(engine.segmentByChunks(input.text as string, (input.max_chunk_size as number) ?? 500));
       } catch (err) {
         return text(`Segment error: ${err instanceof Error ? err.message : String(err)}`);
       }

@@ -3,23 +3,22 @@
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
+import { getResearchEngine, type ResearchEngine } from "../../rd/engine.js";
 
 function text(t: string): MCPToolResult { return { content: [{ type: "text", text: t }] }; }
 function json(d: unknown): MCPToolResult { return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] }; }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let researchEngine: any = null;
+let engineInstance: ResearchEngine | null = null;
 
-function getEngine() {
-  if (!researchEngine) {
+function getEngine(): ResearchEngine | null {
+  if (!engineInstance) {
     try {
-      const mod = require("../../rd/engine.js");
-      researchEngine = mod.getResearchEngine?.() ?? null;
+      engineInstance = getResearchEngine();
     } catch {
       return null;
     }
   }
-  return researchEngine;
+  return engineInstance;
 }
 
 export const rdTools: MCPTool[] = [

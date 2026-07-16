@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/aiyoucli-napi", "crates/aiyoucli-proxy", "crates/aiyoucli-rd"]
+members = ["crates/aiyoucli-napi", "crates/aiyoucli-rd"]
 resolver = "2"
 
 [workspace.package]

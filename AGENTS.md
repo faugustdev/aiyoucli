@@ -48,11 +48,10 @@ aiyoucli init
 ```
 aiyoucli (npm package)
   TypeScript shell (MCP protocol, CLI UX, npm distribution)
-    NAPI bindings (src/napi/index.ts)
-      Rust core (crates/aiyoucli-napi, 4.3MB binary)
+    NAPI bindings (src/napi/index.ts, src/napi/proxy.ts)
+      Rust core (crates/aiyoucli-napi, 6.8MB binary)
         aiyouvector crates (direct path dependency)
-      Rust proxy (crates/aiyoucli-proxy, standalone NAPI binary)
-        Builds independently — no aiyouvector dependency
+        LLM gateway, cache, shield, firewall, AST, semantic routing (consolidated)
 ```
 
 ### Directory Structure
@@ -64,7 +63,7 @@ aiyoucli/
   tsconfig.json                       # TypeScript strict, ES2022, Node16
 
   crates/
-    aiyoucli-napi/                    # Rust NAPI-RS crate
+    aiyoucli-napi/                    # Rust NAPI-RS crate (consolidated)
       src/
         lib.rs                        # Module declarations
         vector.rs                     # VectorDB: open, insert, search, delete, count, stats
@@ -73,15 +72,7 @@ aiyoucli/
         graph.rs                      # KnowledgeGraph: add_node, add_edge, neighbors, k_hop, remove, stats
         routing.rs                    # Q-Learning router + model tier selection (haiku/sonnet/opus)
         analysis.rs                   # Diff classifier + commit classifier + complexity scorer
-    aiyoucli-proxy/                   # Standalone NAPI binary — no aiyouvector deps
-      Cargo.toml                      # napi, reqwest, tokio, regex
-      build.rs
-      src/
-        lib.rs                        # Gateway, compression, shield, routing, AST, embeddings
-        napi.rs                       # NAPI exports
-        ast.rs                        # Multi-language AST analyzer (JS/TS/Python/Rust/Go/Java)
-        embeddings.rs                 # ONNX embedding client (port 8001)
-        semantic.rs                   # Semantic router (keyword + embedding hybrid)
+        proxy.rs                      # ProxyEngine: LLM gateway, cache, shield, firewall, embeddings, AST, semantic
 
   bin/
     aiyoucli.js                       # CLI entry point (auto-detects MCP mode vs interactive)
@@ -97,7 +88,7 @@ aiyoucli/
 
     napi/
       index.ts                        # NAPI binary loader + TypeScript type re-exports
-      proxy.ts                        # ProxyEngineHandle — TypeScript bridge to aiyoucli-proxy
+      proxy.ts                        # ProxyEngineHandle — TypeScript bridge (loads from aiyoucli-napi)
 
     metrics/
       collector.ts                    # Metrics collector — tokens, cost, latency, memory, tool calls
@@ -130,8 +121,8 @@ aiyoucli/
         distiller-tools.ts            # 2 tools: distill_markdown, distill_file
         skills-tools.ts               # 3 tools: sync, list, detect
         proxy-tools.ts                # 10 tools: chat, health, shield_check, compress, analyze_text, segment, list_models, estimate_cost, embed, cache_stats
-        ast-tools.ts                  # 3 tools: ast_analyze, ast_analyze_batch, ast_detect_language (aiyoucli-proxy)
-        semantic-tools.ts             # 5 tools: route, route_hybrid, route_enhanced, embed, stats (aiyoucli-proxy)
+        ast-tools.ts                  # 3 tools: ast_analyze, ast_analyze_batch, ast_detect_language
+        semantic-tools.ts             # 5 tools: route, route_hybrid, route_enhanced, embed, stats
         models-tools.ts               # 2 tools: list, optimize (GGUF model management + Unsloth recommendations)
 
     commands/
@@ -202,7 +193,7 @@ To see all tools: `aiyoucli mcp tools`
 
 Tool dispatch includes production hardening: circuit breaker (threshold=10, reset=15s) and retry with exponential backoff (1 retry, 500ms base).
 
-### Phase 4 — AST Analyzer + Semantic Router (aiyoucli-proxy)
+### Phase 4 — AST Analyzer + Semantic Router (aiyoucli-napi)
 
 | Tool | Description |
 |------|-------------|
@@ -246,34 +237,27 @@ source /tmp/minio-venv/bin/activate && setsid python3 models/embed-server.py
 
 Dependencies: fastapi, uvicorn, onnxruntime, numpy, minio, tokenizers, sentence-transformers (no-deps). The model files are stored in `models/all-MiniLM-L6-v2/` (config.json, model.onnx, model.safetensors, tokenizer.json).
 
-## aiyoucli-proxy NAPI Binary
-
-The `aiyoucli-proxy` crate builds independently from aiyouvector — no external Rust dependencies beyond napi, reqwest, tokio, regex. It provides:
-
-| Module | Key functions |
-|--------|---------------|
-| `lib.rs` | Gateway routing, compression, shield, embedding, cache |
-| `napi.rs` | NAPI-RS exports (ProxyEngine) |
-| `ast.rs` | Multi-language AST: function/class/import extraction (JS/TS/Python/Rust/Go/Java) |
-| `embeddings.rs` | Embedding client targeting the local ONNX server (port 8001) |
-| `semantic.rs` | Semantic router: keyword matching + embedding hybrid |
-
-Build: `cargo build --release -p aiyoucli-proxy && cp target/release/libaiyoucli_proxy.so aiyoucli-proxy.linux-x64-gnu.node`
-
-Build: `cargo build --release -p aiyoucli-rd && cp target/release/libaiyoucli_rd.so aiyoucli-rd.linux-x64-gnu.node`
-
 ## NAPI Rust Bindings
 
-The Rust NAPI crate (`crates/aiyoucli-napi`) provides 6 modules exposed to TypeScript:
+The Rust NAPI crate (`crates/aiyoucli-napi`) provides all modules exposed to TypeScript:
 
-| Module | aiyouvector crate | Key functions |
-|--------|-------------------|---------------|
+| Module | Source | Key functions |
+|--------|--------|---------------|
 | `vector.rs` | aiyouvector-core | VectorDB open/insert/search/delete/stats (HNSW + SIMD + redb) |
 | `sona.rs` | aiyouvector-sona | SONA learning: submit_observation, transform_embedding (MicroLoRA), force_learn |
 | `attention.rs` | aiyouvector-attention | AttentionRouter: scaled-dot, multi-head, flash, linear — auto-selects by input size |
 | `graph.rs` | aiyouvector-graph | KnowledgeGraph: add_node/edge, neighbors, k-hop BFS, CSR export |
-| `routing.rs` | (new Rust code) | Q-Learning task-to-agent router + model tier selection (haiku/sonnet/opus) |
-| `analysis.rs` | (new Rust code) | Git diff classifier, conventional commit classifier, code complexity scorer |
+| `routing.rs` | aiyouvector-routing | Q-Learning task-to-agent router + model tier selection (haiku/sonnet/opus) |
+| `analysis.rs` | new Rust code | Git diff classifier, conventional commit classifier, code complexity scorer |
+| `proxy.rs` | consolidated | ProxyEngine: LLM gateway, cache, shield, firewall, compression, AST, semantic routing |
+| `llm.rs` | consolidated | LLM provider (OpenAI/Anthropic/Custom) — chat completion, health check |
+| `cache.rs` | consolidated | TTL response cache with SHA-256 keys |
+| `shield.rs` | consolidated | Prompt injection detection + content safety |
+| `firewall.rs` | consolidated | Rate limiting + origin blocklist |
+| `compressor.rs` | consolidated | Token compression + message pruning |
+| `embeddings.rs` | consolidated | ONNX embedding client (port 8001) |
+| `ast.rs` | consolidated | Multi-language AST analyzer (JS/TS/Python/Rust/Go/Java) |
+| `semantic.rs` | consolidated | Semantic router: keyword matching + embedding hybrid (8 agents) |
 
 Performance: ~18us/vector insert, ~256us/search query, <0.01ms SONA adaptation.
 
@@ -344,6 +328,6 @@ State is stored in `.aiyoucli/` in the project root:
 | Done | HNSW index in memory tools | HNSW enabled by default (open + in-memory) |
 | Done | Q-table persistence to disk | Auto-save to .aiyoucli/q-table.json |
 | Done | ONNX embedding server | Local all-MiniLM-L6-v2 on port 8001 |
-| Done | aiyoucli-proxy NAPI binary | Standalone build, no aiyouvector deps |
+| Done | Consolidated proxy into aiyoucli-napi | Single NAPI binary — LLM gateway, cache, shield, firewall, AST, semantic |
 | Low | Plugin system | Deferred |
 | Low | IPFS pattern sharing | Deferred |

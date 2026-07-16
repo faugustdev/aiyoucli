@@ -378,6 +378,73 @@ Leiden-like label propagation with configurable resolution. Returns clusters wit
 
 ---
 
+## Deep Research (`aiyoucli-rd`)
+
+Multi-engine research orchestration with NAPI-powered document processing and knowledge graphs.
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    TypeScript Layer                           │
+│  ResearchEngine (src/rd/engine.ts)                           │
+│  Session lifecycle · Strategy management · State persistence │
+├──────────────────────────────────────────────────────────────┤
+│                    NAPI Bridge                                │
+│                    aiyoucli-rd.node                          │
+├──────────────────────────────────────────────────────────────┤
+│                    Rust Engine                                │
+│  rd_create_session    Session ID generation + JSON           │
+│  rd_search_web        Web search queue management            │
+│  rd_get_strategies    Strategy enumeration                   │
+│  rd_process_document  PDF/DOCX/image processing              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `langgraph-agent` | Autonomous agent with iterative research loop |
+| `source-based` | Focus on collecting and analyzing sources |
+| `focused-iteration` | Deep dive into specific subtopics |
+| `topic-organization` | Organize findings by topic clusters |
+| `quick` | Fast overview with minimal iterations |
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `rd_init` | Initialize research session with query and strategy |
+| `rd_search` | Search across engines (arXiv, PubMed, Semantic Scholar, Wikipedia, SearXNG) |
+| `rd_strategies` | List available research strategies |
+| `rd_status` | Check research session progress |
+| `rd_report` | Generate markdown/json research report |
+| `rd_knowledge_graph` | View knowledge graph nodes and connections |
+| `rd_document_process` | Process PDF/DOCX/images with optional OCR |
+| `rd_citations` | Generate citations (APA, MLA, Chicago, BibTeX) |
+
+### Usage
+
+```sh
+# Start autonomous research
+aiyoucli rd init --query "Rust zero-copy deserialization patterns" --strategy langgraph-agent
+
+# Search academic papers
+aiyoucli rd search --query "HNSW vs IVF index performance" --engine arxiv
+
+# Check progress
+aiyoucli rd status --session-id rd_xxxx
+
+# Generate report
+aiyoucli rd report --session-id rd_xxxx --format markdown
+
+# Process scanned PDF
+aiyoucli rd doc --path paper.pdf --ocr
+```
+
+---
+
 ## OpenCode Integration
 
 aiyoucli integrates with [OpenCode](https://opencode.ai) at multiple levels:
@@ -432,22 +499,22 @@ Interactive flow: MinIO health check → GPU detection → model selection → w
 │                      (TypeScript)                             │
 │   25 commands · 84 MCP tools · production middleware          │
 │   Circuit breaker · Rate limiter · Retry + exponential backoff│
-├─────────────────────────────┬────────────────────────────────┤
-│         NAPI Bridge         │         NAPI Bridge             │
-│    (aiyoucli-napi)          │      (aiyoucli-proxy)           │
-├─────────────────────────────┼────────────────────────────────┤
-│      Rust Engines           │      Standalone Proxy           │
-│                             │                                 │
-│  vector    HNSW + SIMD      │  Gateway routing + cache        │
-│  sona      MicroLoRA+EWC++  │  Shield + firewall              │
-│  attention 4 mechanisms     │  Compression + segmentation     │
-│  routing   Q-learning       │  AST analysis (6 languages)     │
-│  graph     k-hop + BFS      │  Semantic routing (hybrid)      │
-│  analysis  diff/commit/     │  Embedding (ONNX client)        │
-│            complexity       │                                 │
-│  detector  45+ techs        │                                 │
-│  distiller TOON format      │                                 │
-├─────────────────────────────┴────────────────────────────────┤
+├──────────────────────────────────────────────────────────────┤
+│                    NAPI Bridge (two binaries)                 │
+│                    aiyoucli-napi (6.8MB) + aiyoucli-rd        │
+├──────────────────────────────────────────────────────────────┤
+│                     Rust Engines                              │
+│                                                               │
+│  vector    HNSW + SIMD       │  Gateway routing + cache       │
+│  sona      MicroLoRA+EWC++   │  Shield + firewall             │
+│  attention 4 mechanisms      │  Compression + segmentation    │
+│  routing   Q-learning        │  AST analysis (6 languages)    │
+│  graph     k-hop + BFS       │  Semantic routing (hybrid)     │
+│  analysis  diff/commit/      │  Embedding (ONNX client)       │
+│            complexity        │                                 │
+│  detector  45+ techs         │  Research orchestration (rd)    │
+│  distiller TOON format       │  Web search + doc processing   │
+├──────────────────────────────────────────────────────────────┤
 │                    aiyouvector (17 crates)                    │
 │  codebase graph · profile · embeddings · solver · gnn         │
 │  metagraph · observer · watchdog · daemon · server             │

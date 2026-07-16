@@ -1,5 +1,5 @@
 /**
- * Semantic tools — semantic routing via aiyoucli-proxy NAPI.
+ * Semantic tools — semantic routing via aiyoucli-napi NAPI.
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";

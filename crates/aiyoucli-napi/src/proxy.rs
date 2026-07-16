@@ -1,4 +1,4 @@
-//! NAPI bindings for aiyoucli-proxy — LLM gateway, compression, firewall.
+//! Proxy engine — LLM gateway, compression, firewall, cache, embeddings, AST, semantic routing.
 
 use std::sync::Mutex;
 
@@ -366,6 +366,23 @@ impl ProxyEngine {
             .unwrap_or_default();
 
         let result = self.semantic_router.keyword.route_with_embeddings(&task, scores);
+        serde_json::to_value(&result).unwrap_or_default()
+    }
+
+    /// Auto hybrid route — keyword matching enhanced with internal embedding scores.
+    #[napi]
+    pub fn semantic_route_enhanced(&self, task: String) -> serde_json::Value {
+        let embedding = self.semantic_router.keyword.embed(&task);
+        let agents = ["coder", "tester", "architect", "reviewer", "security", "debugger", "documenter", "researcher"];
+        let embedding_scores: HashMap<String, f64> = agents
+            .iter()
+            .enumerate()
+            .filter_map(|(i, name)| {
+                embedding.get(i).map(|&score| (name.to_string(), score))
+            })
+            .collect();
+
+        let result = self.semantic_router.keyword.route_with_embeddings(&task, embedding_scores);
         serde_json::to_value(&result).unwrap_or_default()
     }
 

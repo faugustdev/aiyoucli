@@ -26,19 +26,6 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "parking_lot",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "aiyoucli-proxy"
-version = "0.1.0"
-dependencies = [
- "napi",
- "napi-build",
- "napi-derive",
- "parking_lot",
  "regex",
  "reqwest",
  "serde",

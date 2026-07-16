@@ -103,14 +103,14 @@ Lifecycle hooks with Q-learning task routing:
 - \`hooks_model_route\` — select model tier (haiku/sonnet/opus) for cost optimization
 - \`hooks_stats\` — routing engine statistics
 
-### Deep Research
+### Deep Research (NAPI-powered)
 
-Multi-engine web research with strategy-driven orchestration:
+Multi-engine web research with Rust NAPI orchestration:
 - \`rd_init\` — start research session (langgraph-agent, source-based, focused-iteration, quick)
 - \`rd_search\` — search across engines (arXiv, PubMed, Semantic Scholar, Wikipedia, SearXNG)
 - \`rd_report\` — generate markdown/json research report
 - \`rd_knowledge_graph\` — view knowledge graph nodes and connections
-- \`rd_document_process\` — process PDF/DOCX/images with optional OCR
+- \`rd_document_process\` — process PDF/DOCX/images with optional OCR (Rust NAPI)
 - \`rd_citations\` — generate citations (APA, MLA, Chicago, BibTeX)
 `;
 
