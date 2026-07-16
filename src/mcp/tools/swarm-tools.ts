@@ -59,16 +59,6 @@ export const swarmTools: MCPTool[] = [
     },
   },
   {
-    name: "swarm_status",
-    description: "Get current swarm status",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => {
-      const state = loadState();
-      if (!state) return text("No active swarm. Run swarm_init first.");
-      return json(state);
-    },
-  },
-  {
     name: "swarm_stop",
     description: "Stop the active swarm",
     inputSchema: { type: "object", properties: {} },

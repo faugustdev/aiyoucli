@@ -195,44 +195,4 @@ export const hooksTools: MCPTool[] = [
       return text(`Recorded ${(input.success as boolean) ? "success" : "failure"} for ${input.agent} (Q-table saved)`);
     },
   },
-  {
-    name: "hooks_route",
-    description: "Route a task to the optimal agent type",
-    inputSchema: {
-      type: "object",
-      properties: {
-        task: { type: "string", description: "Task description" },
-      },
-      required: ["task"],
-    },
-    handler: async (input) => {
-      const r = await getRouter();
-      return json(r.route(input.task as string));
-    },
-  },
-  {
-    name: "hooks_model_route",
-    description: "Select optimal model tier (haiku/sonnet/opus) for a task",
-    inputSchema: {
-      type: "object",
-      properties: {
-        task: { type: "string", description: "Task description" },
-      },
-      required: ["task"],
-    },
-    handler: async (input) => {
-      const r = await getRouter();
-      const tier = r.selectModelTier(input.task as string);
-      return json({ model: tier });
-    },
-  },
-  {
-    name: "hooks_stats",
-    description: "Get routing engine statistics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => {
-      const r = await getRouter();
-      return json(r.stats());
-    },
-  },
 ];

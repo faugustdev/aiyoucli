@@ -49,7 +49,12 @@ async function handleRequest(request: JsonRpcRequest): Promise<void> {
         result: {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "aiyoucli", version: "0.1.0" },
+          serverInfo: {
+            name: "aiyoucli",
+            version: "1.0.2",
+            description: "AI agent CLI with Rust-backed vector intelligence (aiyouvector NAPI + aiyou-team integration)",
+            integrations: ["aiyouvector", "aiyou-team"],
+          },
         },
       });
       break;

@@ -1,5 +1,5 @@
 /**
- * AST tools — multi-language AST analysis via aiyoucli-napi NAPI.
+ * AST tools — unified dispatch by mode (multi-language AST analysis via NAPI).
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
@@ -10,48 +10,30 @@ function json(d: unknown): MCPToolResult { return { content: [{ type: "text", te
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let proxyEngine: any = null;
 
-function createProxyEngine() {
-  try {
-    const mod = require("../../napi/proxy.js");
-    return mod.getProxyEngine?.() ?? null;
-  } catch {
-    return null;
+function getEngine(): any {
+  if (!proxyEngine) {
+    try {
+      const mod = require("../../napi/proxy.js");
+      proxyEngine = mod.getProxyEngine?.() ?? null;
+    } catch { return null; }
   }
-}
-
-function getEngine() {
-  if (!proxyEngine) proxyEngine = createProxyEngine();
   return proxyEngine;
 }
 
 export const astTools: MCPTool[] = [
   {
-    name: "ast_analyze",
-    description: "Analyze source code AST — extracts functions, classes, imports for JS/TS/Python/Rust/Go/Java",
+    name: "ast",
+    description: "Multi-language AST analysis. mode=analyze: single source. mode=batch: multiple files. mode=detect: detect language by extension.",
     inputSchema: {
       type: "object",
       properties: {
-        source: { type: "string", description: "Source code content" },
-        language: { type: "string", description: "Language hint (auto-detected if omitted)" },
-      },
-      required: ["source"],
-    },
-    handler: async (input) => {
-      const engine = getEngine();
-      if (!engine) return text("AST analyzer not available");
-      try {
-        return json(engine.analyzeCode(input.source as string, input.language as string | undefined));
-      } catch (err) {
-        return text(`AST analyze error: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    },
-  },
-  {
-    name: "ast_analyze_batch",
-    description: "Batch-analyze multiple source files",
-    inputSchema: {
-      type: "object",
-      properties: {
+        mode: {
+          type: "string",
+          enum: ["analyze", "batch", "detect"],
+          description: "AST operation mode",
+        },
+        source: { type: "string", description: "Source code content (for mode=analyze)" },
+        language: { type: "string", description: "Language hint (for mode=analyze)" },
         files: {
           type: "array",
           items: {
@@ -61,38 +43,36 @@ export const astTools: MCPTool[] = [
               source: { type: "string" },
             },
           },
-          description: "Array of {path, source} objects",
+          description: "Array of {path, source} objects (for mode=batch)",
         },
+        path: { type: "string", description: "File path or extension (for mode=detect)" },
       },
-      required: ["files"],
+      required: ["mode"],
     },
     handler: async (input) => {
+      const mode = input.mode as string;
       const engine = getEngine();
       if (!engine) return text("AST analyzer not available");
+
       try {
-        return json(engine.analyzeCodeBatch(input.files as Array<{ path: string; source: string }>));
+        switch (mode) {
+          case "analyze": {
+            if (!input.source) return text("Missing 'source' for mode=analyze");
+            return json(engine.analyzeCode(input.source as string, input.language as string | undefined));
+          }
+          case "batch": {
+            if (!input.files) return text("Missing 'files' for mode=batch");
+            return json(engine.analyzeCodeBatch(input.files as Array<{ path: string; source: string }>));
+          }
+          case "detect": {
+            if (!input.path) return text("Missing 'path' for mode=detect");
+            return json(engine.detectLanguage(input.path as string));
+          }
+          default:
+            return text(`Unknown mode: ${mode}. Valid: analyze, batch, detect`);
+        }
       } catch (err) {
-        return text(`AST batch error: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    },
-  },
-  {
-    name: "ast_detect_language",
-    description: "Detect programming language by file extension",
-    inputSchema: {
-      type: "object",
-      properties: {
-        path: { type: "string", description: "File path or extension" },
-      },
-      required: ["path"],
-    },
-    handler: async (input) => {
-      const engine = getEngine();
-      if (!engine) return text("AST analyzer not available");
-      try {
-        return json(engine.detectLanguage(input.path as string));
-      } catch (err) {
-        return text(`AST detect error: ${err instanceof Error ? err.message : String(err)}`);
+        return text(`AST error: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
   },

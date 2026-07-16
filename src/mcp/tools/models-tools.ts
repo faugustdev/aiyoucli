@@ -1,10 +1,11 @@
 /**
- * Models tools — GGUF model management and Unsloth recommendations.
+ * Models tools — unified dispatch by action.
+ * Consolidates: list, optimize, start, stop, status, list_remote.
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { join } from "node:path";
 
 function text(t: string): MCPToolResult { return { content: [{ type: "text", text: t }] }; }
 function json(d: unknown): MCPToolResult { return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] }; }
@@ -63,91 +64,88 @@ function findUnslothUpgrade(modelName: string): { repo: string; note: string } |
   return null;
 }
 
+function getProxyEngine(): any {
+  try {
+    const mod = require("../../napi/proxy.js");
+    return mod.getProxyEngine?.() ?? null;
+  } catch { return null; }
+}
+
 export const modelsTools: MCPTool[] = [
   {
-    name: "models_list",
-    description: "Scan a directory for GGUF models and show Unsloth Dynamic v2.0 upgrade recommendations",
+    name: "models",
+    description: "Model management. action=list: scan local GGUF. action=optimize: get Unsloth upgrade. action=start: interactive launcher. action=stop: stop all. action=status: show running. action=list_remote: list via proxy.",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Directory to scan (default: .aiyoucli/models/)" },
+        action: {
+          type: "string",
+          enum: ["list", "optimize", "start", "stop", "status", "list_remote"],
+          description: "Model action",
+        },
+        path: { type: "string", description: "Directory to scan (for action=list, default: .aiyoucli/models/)" },
+        model: { type: "string", description: "Model name (for action=optimize)" },
       },
+      required: ["action"],
     },
     handler: async (input) => {
-      const cwd = process.cwd();
-      const scanPath = (input.path as string) || join(cwd, ".aiyoucli", "models");
-
-      if (!existsSync(scanPath)) {
-        return json({
-          scanned_path: scanPath,
-          exists: false,
-          message: `Directory not found: ${scanPath}`,
-          models: [],
-          total_models: 0,
-          total_size_gb: 0,
-        });
+      const action = input.action as string;
+      switch (action) {
+        case "list": {
+          const cwd = process.cwd();
+          const scanPath = (input.path as string) || join(cwd, ".aiyoucli", "models");
+          if (!existsSync(scanPath)) {
+            return json({ scanned_path: scanPath, exists: false, message: `Directory not found: ${scanPath}`, models: [], total_models: 0, total_size_gb: 0 });
+          }
+          const files = readdirSync(scanPath).filter((f) => f.endsWith(".gguf"));
+          const models = files.map((file) => {
+            const fullPath = join(scanPath, file);
+            const sizeBytes = statSync(fullPath).size;
+            const sizeGb = sizeBytes / (1024 * 1024 * 1024);
+            const modelName = extractModelName(file);
+            return {
+              file,
+              model_name: modelName,
+              quantization: detectQuantization(file),
+              size_gb: Math.round(sizeGb * 100) / 100,
+              size_bytes: sizeBytes,
+              unsloth_upgrade: findUnslothUpgrade(modelName),
+            };
+          });
+          const totalSize = models.reduce((s, m) => s + m.size_bytes, 0);
+          return json({ scanned_path: scanPath, exists: true, models, total_models: models.length, total_size_gb: Math.round((totalSize / (1024 * 1024 * 1024)) * 100) / 100 });
+        }
+        case "optimize": {
+          if (!input.model) return text("Missing 'model' for action=optimize");
+          const model = (input.model as string).toLowerCase();
+          const upgrade = findUnslothUpgrade(model);
+          if (upgrade) return json({ model, available: true, repo: upgrade.repo, note: upgrade.note, install: `huggingface-cli download ${upgrade.repo}` });
+          return json({ model, available: false, message: "No Unsloth Dynamic v2.0 known for this model", known_models: Object.keys(UNSLOTH_UPGRADES) });
+        }
+        case "start": {
+          const { startInteractive } = await import("../../models/manager.js");
+          try { return json(await startInteractive()); }
+          catch (err) { return text(`Error: ${err instanceof Error ? err.message : String(err)}`); }
+        }
+        case "stop": {
+          const { stopInteractive } = await import("../../models/manager.js");
+          try { return json(stopInteractive()); }
+          catch (err) { return text(`Error: ${err instanceof Error ? err.message : String(err)}`); }
+        }
+        case "status": {
+          const { showStatus } = await import("../../models/manager.js");
+          try { return text(showStatus()); }
+          catch (err) { return text(`Error: ${err instanceof Error ? err.message : String(err)}`); }
+        }
+        case "list_remote": {
+          const engine = getProxyEngine();
+          if (!engine) return text("Proxy engine not available");
+          try { return json(engine.listModels()); }
+          catch { return text("Failed to list models"); }
+        }
+        default:
+          return text(`Unknown action: ${action}. Valid: list, optimize, start, stop, status, list_remote`);
       }
-
-      const files = readdirSync(scanPath).filter((f) => f.endsWith(".gguf"));
-      const models = files.map((file) => {
-        const fullPath = join(scanPath, file);
-        const sizeBytes = statSync(fullPath).size;
-        const sizeGb = sizeBytes / (1024 * 1024 * 1024);
-        const quantization = detectQuantization(file);
-        const modelName = extractModelName(file);
-        const unslothUpgrade = findUnslothUpgrade(modelName);
-
-        return {
-          file,
-          model_name: modelName,
-          quantization,
-          size_gb: Math.round(sizeGb * 100) / 100,
-          size_bytes: sizeBytes,
-          unsloth_upgrade: unslothUpgrade,
-        };
-      });
-
-      const totalSize = models.reduce((sum, m) => sum + m.size_bytes, 0);
-
-      return json({
-        scanned_path: scanPath,
-        exists: true,
-        models,
-        total_models: models.length,
-        total_size_gb: Math.round((totalSize / (1024 * 1024 * 1024)) * 100) / 100,
-      });
-    },
-  },
-  {
-    name: "models_optimize",
-    description: "Get Unsloth Dynamic v2.0 upgrade recommendation for a model",
-    inputSchema: {
-      type: "object",
-      properties: {
-        model: { type: "string", description: "Model name (e.g. llama-3.1-8b)" },
-      },
-      required: ["model"],
-    },
-    handler: async (input) => {
-      const model = (input.model as string).toLowerCase();
-      const upgrade = findUnslothUpgrade(model);
-
-      if (upgrade) {
-        return json({
-          model,
-          available: true,
-          repo: upgrade.repo,
-          note: upgrade.note,
-          install: `huggingface-cli download ${upgrade.repo}`,
-        });
-      }
-
-      return json({
-        model,
-        available: false,
-        message: "No Unsloth Dynamic v2.0 known for this model",
-        known_models: Object.keys(UNSLOTH_UPGRADES),
-      });
     },
   },
 ];

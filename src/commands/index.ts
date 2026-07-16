@@ -319,7 +319,7 @@ const agentCommand: Command = {
       description: "Get aggregated metrics across all agents",
       action: async () => {
         ensureTools();
-        const result = await callTool("agent_metrics", {});
+        const result = await callTool("stats", { scope: "agents" });
         printJson(result);
       },
     },
@@ -362,7 +362,7 @@ const swarmCommand: Command = {
       description: "Get swarm status",
       action: async () => {
         ensureTools();
-        const result = await callTool("swarm_status", {});
+        const result = await callTool("status", { scope: "swarm" });
         printJson(result);
       },
     },
@@ -454,7 +454,7 @@ const memoryCommand: Command = {
       description: "Show memory statistics",
       action: async () => {
         ensureTools();
-        const result = await callTool("memory_stats", {});
+        const result = await callTool("stats", { scope: "memory" });
         printJson(result);
       },
     },
@@ -646,7 +646,7 @@ const hooksCommand: Command = {
         ensureTools();
         const task = ctx.flags.task || ctx.flags.t || ctx.args.join(" ");
         if (!task) { output.error("Task description required: --task <text>"); return; }
-        const result = await callTool("hooks_route", { task });
+        const result = await callTool("route", { action: "qlearn", task });
         printJson(result);
       },
     },
@@ -694,7 +694,7 @@ const hooksCommand: Command = {
       description: "Routing engine statistics",
       action: async () => {
         ensureTools();
-        const result = await callTool("hooks_stats", {});
+        const result = await callTool("stats", { scope: "routing" });
         printJson(result);
       },
     },
@@ -750,7 +750,7 @@ const statusCommand: Command = {
   description: "System status",
   action: async () => {
     ensureTools();
-    const result = await callTool("system_status", {});
+    const result = await callTool("status", { scope: "system" });
     printJson(result);
   },
 };
@@ -827,7 +827,7 @@ const neuralCommand: Command = {
       description: "SONA engine statistics",
       action: async () => {
         ensureTools();
-        const result = await callTool("neural_stats", {});
+        const result = await callTool("stats", { scope: "neural" });
         printJson(result);
       },
     },
@@ -871,7 +871,7 @@ const analyzeCommand: Command = {
         ensureTools();
         const diff = ctx.flags.diff || ctx.flags.d || ctx.args.join(" ");
         if (!diff) { output.error("Diff content required: --diff <content> or pipe via stdin"); return; }
-        const result = await callTool("analyze_diff", { diff });
+        const result = await callTool("analyze", { type: "diff", diff });
         printJson(result);
       },
     },
@@ -885,7 +885,7 @@ const analyzeCommand: Command = {
         ensureTools();
         const message = ctx.flags.message || ctx.flags.m || ctx.args.join(" ");
         if (!message) { output.error("Commit message required: --message <text>"); return; }
-        const result = await callTool("analyze_commit", { message });
+        const result = await callTool("analyze", { type: "commit", message });
         printResult(result);
       },
     },
@@ -899,7 +899,7 @@ const analyzeCommand: Command = {
         ensureTools();
         const source = ctx.flags.source || ctx.flags.s || ctx.args.join(" ");
         if (!source) { output.error("Source code required: --source <code>"); return; }
-        const result = await callTool("analyze_complexity", { source });
+        const result = await callTool("analyze", { type: "complexity", source });
         printJson(result);
       },
     },
@@ -918,7 +918,7 @@ const routeCommand: Command = {
     ensureTools();
     const task = ctx.flags.task || ctx.flags.t || ctx.args.join(" ");
     if (!task) { output.error("Task description required: --task <text>"); return; }
-    const result = await callTool("hooks_route", { task });
+    const result = await callTool("route", { action: "qlearn", task });
     printJson(result);
   },
 };
@@ -1062,9 +1062,7 @@ const modelsCommand: Command = {
       ],
       action: async (ctx) => {
         ensureTools();
-        const result = await callTool("models_list", {
-          path: ctx.flags.path || ctx.flags.p,
-        });
+        const result = await callTool("models", { action: "list", path: ctx.flags.path || ctx.flags.p });
         const raw = result.content[0]?.text ?? "{}";
         try {
           const data = JSON.parse(raw);
@@ -1105,7 +1103,7 @@ const modelsCommand: Command = {
         ensureTools();
         const model = ctx.flags.model || ctx.flags.m || ctx.args.join(" ");
         if (!model) { output.error("Model name required: --model <name>"); return; }
-        const result = await callTool("models_optimize", { model });
+        const result = await callTool("models", { action: "optimize", model });
         printJson(result);
       },
     },

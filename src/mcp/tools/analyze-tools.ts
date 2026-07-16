@@ -1,5 +1,5 @@
 /**
- * Analysis tools — diff classification, complexity scoring via NAPI.
+ * Analysis tools — unified dispatch by type.
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
@@ -12,42 +12,41 @@ function json(d: unknown): MCPToolResult { return { content: [{ type: "text", te
 
 export const analyzeTools: MCPTool[] = [
   {
-    name: "analyze_diff",
-    description: "Classify a git diff — returns file-level classification, impact, risk factors",
+    name: "analyze",
+    description: "Code analysis. type=diff: classify git diff. type=commit: classify commit message. type=complexity: score code complexity.",
     inputSchema: {
       type: "object",
       properties: {
-        diff: { type: "string", description: "Git diff content (from `git diff`)" },
+        type: {
+          type: "string",
+          enum: ["diff", "commit", "complexity"],
+          description: "Analysis type",
+        },
+        diff: { type: "string", description: "Git diff content (for type=diff)" },
+        message: { type: "string", description: "Commit message (for type=commit)" },
+        source: { type: "string", description: "Source code (for type=complexity)" },
       },
-      required: ["diff"],
-    },
-    handler: async (input) => json(engine.classifyDiff(input.diff as string)),
-  },
-  {
-    name: "analyze_commit",
-    description: "Classify a commit message (conventional commit detection)",
-    inputSchema: {
-      type: "object",
-      properties: {
-        message: { type: "string", description: "Commit message" },
-      },
-      required: ["message"],
-    },
-    handler: async (input) => text(engine.classifyCommit(input.message as string)),
-  },
-  {
-    name: "analyze_complexity",
-    description: "Score code complexity (0.0 = simple, 1.0 = very complex)",
-    inputSchema: {
-      type: "object",
-      properties: {
-        source: { type: "string", description: "Source code content" },
-      },
-      required: ["source"],
+      required: ["type"],
     },
     handler: async (input) => {
-      const score = engine.complexityScore(input.source as string);
-      return json({ score, level: score < 0.3 ? "low" : score < 0.6 ? "medium" : "high" });
+      const type = input.type as string;
+      switch (type) {
+        case "diff": {
+          if (!input.diff) return text("Missing 'diff' parameter for type=diff");
+          return json(engine.classifyDiff(input.diff as string));
+        }
+        case "commit": {
+          if (!input.message) return text("Missing 'message' parameter for type=commit");
+          return text(engine.classifyCommit(input.message as string));
+        }
+        case "complexity": {
+          if (!input.source) return text("Missing 'source' parameter for type=complexity");
+          const score = engine.complexityScore(input.source as string);
+          return json({ score, level: score < 0.3 ? "low" : score < 0.6 ? "medium" : "high" });
+        }
+        default:
+          return text(`Unknown type: ${type}. Valid: diff, commit, complexity`);
+      }
     },
   },
 ];

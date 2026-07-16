@@ -66,10 +66,4 @@ export const neuralTools: MCPTool[] = [
       return text(`Processed ${processed} trajectories`);
     },
   },
-  {
-    name: "neural_stats",
-    description: "Get SONA engine statistics (resets per CLI invocation, accumulates in MCP session)",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => json(getSona().stats()),
-  },
 ];

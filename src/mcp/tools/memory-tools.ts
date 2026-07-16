@@ -150,15 +150,6 @@ export const memoryTools: MCPTool[] = [
   },
 
   {
-    name: "memory_stats",
-    description: "Get memory database statistics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => {
-      return jsonResult(getDB().stats());
-    },
-  },
-
-  {
     name: "memory_delete",
     description: "Delete a vector by ID",
     inputSchema: {

@@ -185,26 +185,33 @@ aiyoucli/
 | `skills` | sync, list, detect | Skill discovery and TOON distillation |
 | `rd` | init, search, strategies, status, report, doc | Deep research (strategies, search, documents, knowledge graph) |
 
-## MCP Tools (84)
+## MCP Tools (60)
 
-The CLI exposes 84 tools via MCP protocol (JSON-RPC over stdio). Claude Code, Gemini CLI, or any MCP client can call these tools.
+The CLI exposes 60 tools via MCP protocol (JSON-RPC over stdio). Claude Code, Gemini CLI, or any MCP client can call these tools.
 
 To see all tools: `aiyoucli mcp tools`
 
 Tool dispatch includes production hardening: circuit breaker (threshold=10, reset=15s) and retry with exponential backoff (1 retry, 500ms base).
 
-### Phase 4 — AST Analyzer + Semantic Router (aiyoucli-napi)
+### Consolidated Tools (8 tools replacing 29)
+
+| Consolidated tool | Replaces | Dispatch param |
+|---|---|---|
+| `route` | hooks_route, hooks_model_route, semantic_route, semantic_route_hybrid, semantic_route_enhanced | `action: qlearn|model_tier|keyword|hybrid|enhanced` |
+| `status` | system_status, coordination_status, statusline, swarm_status | `scope: system|coordination|statusline|swarm` |
+| `stats` | memory_stats, agent_metrics, hooks_stats, neural_stats, semantic_stats, proxy_cache_stats, metrics_snapshot | `scope: memory|agents|routing|neural|semantic|cache|full` |
+| `metrics` | metrics_record_tokens, cost, memory, latency, tools_summary, save, reset | `action: record_tokens|cost|memory|latency|tools_summary|save|reset` |
+| `embed` | proxy_embed, semantic_embed | `type: onnx|keyword` |
+| `models` | models_list, models_optimize, models_start, models_stop, models_status, proxy_list_models | `action: list|optimize|start|stop|status|list_remote` |
+| `analyze` | analyze_diff, analyze_commit, analyze_complexity | `type: diff|commit|complexity` |
+| `ast` | ast_analyze, ast_analyze_batch, ast_detect_language | `mode: analyze|batch|detect` |
+
+### Discovery Tools (2 new — exposes aiyouvector + aiyou-team to MCP clients)
 
 | Tool | Description |
-|------|-------------|
-| `ast_analyze` | Multi-language AST analysis (JS, TS, Python, Rust, Go, Java) |
-| `ast_analyze_batch` | Batch analyze multiple source files |
-| `ast_detect_language` | Detect language by file extension |
-| `semantic_route` | Route task to agent (keyword matching, 8 agents) |
-| `semantic_route_hybrid` | Route task with custom embedding scores |
-| `semantic_route_enhanced` | Auto hybrid route (keyword + gateway embedding) |
-| `semantic_embed` | Get 8-dim keyword embedding vector |
-| `semantic_stats` | Router config + agent statistics |
+|---|---|
+| `capabilities` | Reports NAPI features, aiyouvector integration, aiyou-team availability, embed server status |
+| `version` | Version info for aiyoucli, aiyouvector, aiyou-team, runtime env |
 
 AST TypeScript bridge: `src/napi/proxy.ts` — adds `analyzeCode`, `analyzeCodeBatch`, `detectLanguage`, `semanticRoute`, `semanticRouteHybrid`, `semanticEmbed`, `semanticStats` to `ProxyEngineHandle`.
 

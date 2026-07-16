@@ -11,29 +11,6 @@ function json(d: unknown): MCPToolResult { return { content: [{ type: "text", te
 
 export const systemTools: MCPTool[] = [
   {
-    name: "system_status",
-    description: "Get system status overview",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => {
-      const cwd = process.cwd();
-      const hasConfig = existsSync(join(cwd, ".aiyoucli", "config.json"));
-      const hasAgents = existsSync(join(cwd, ".aiyoucli", "agents", "store.json"));
-      const hasSwarm = existsSync(join(cwd, ".aiyoucli", "swarm", "state.json"));
-
-      return json({
-        version: "0.1.0",
-        cwd,
-        node: process.version,
-        platform: process.platform,
-        arch: process.arch,
-        initialized: hasConfig,
-        agents: hasAgents,
-        swarm: hasSwarm,
-        uptime: Math.round(process.uptime()),
-      });
-    },
-  },
-  {
     name: "system_doctor",
     description: "Run health diagnostics",
     inputSchema: { type: "object", properties: {} },

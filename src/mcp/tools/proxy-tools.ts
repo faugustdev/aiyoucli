@@ -114,55 +114,6 @@ export const proxyTools: MCPTool[] = [
     },
   },
   {
-    name: "proxy_embed",
-    description: "Get embedding vector from the local ONNX server",
-    inputSchema: {
-      type: "object",
-      properties: {
-        text: { type: "string", description: "Text to embed" },
-      },
-      required: ["text"],
-    },
-    handler: async (input) => {
-      const engine = getProxyEngine();
-      if (!engine) return text("proxy engine not available (embedding server may not be running)");
-      try {
-        const result = engine.embedText(input.text as string);
-        return json(result);
-      } catch (err) {
-        return text(`Proxy embed error: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    },
-  },
-  {
-    name: "proxy_cache_stats",
-    description: "Get proxy cache statistics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => {
-      const engine = getProxyEngine();
-      if (!engine) return text("proxy engine not available");
-      try {
-        return json(engine.cacheStats());
-      } catch {
-        return text("Failed to get cache stats");
-      }
-    },
-  },
-  {
-    name: "proxy_list_models",
-    description: "List available models through the proxy gateway",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => {
-      const engine = getProxyEngine();
-      if (!engine) return text("proxy engine not available");
-      try {
-        return json(engine.listModels());
-      } catch {
-        return text("Failed to list models");
-      }
-    },
-  },
-  {
     name: "proxy_estimate_cost",
     description: "Estimate token cost for a request",
     inputSchema: {
