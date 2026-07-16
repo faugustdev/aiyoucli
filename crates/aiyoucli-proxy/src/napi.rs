@@ -29,7 +29,6 @@ pub struct ProxyEngine {
 
 struct SemRouter {
     keyword: SemanticRouter,
-    embedding: Option<crate::embeddings::Embedder>,
 }
 
 #[napi]
@@ -45,7 +44,6 @@ impl ProxyEngine {
             embedder: tokio::sync::Mutex::new(Embedder::new(None)),
             semantic_router: SemRouter {
                 keyword: SemanticRouter::new(None),
-                embedding: None,
             },
             runtime,
         }

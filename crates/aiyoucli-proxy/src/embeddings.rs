@@ -1,6 +1,6 @@
 /// Embeddings — generate text embeddings via the local gateway or provider.
 
-use crate::{DEFAULT_EMBED_URL, DEFAULT_GATEWAY_URL};
+use crate::DEFAULT_EMBED_URL;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]

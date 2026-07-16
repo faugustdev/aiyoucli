@@ -1,7 +1,7 @@
 /// Firewall — access control, rate limiting, origin validation.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -23,7 +23,6 @@ pub struct RateLimiter {
     tokens: HashMap<String, BucketState>,
     capacity: u32,
     refill_rate: f64,
-    refill_interval: Duration,
 }
 
 struct BucketState {
@@ -37,7 +36,6 @@ impl RateLimiter {
             tokens: HashMap::new(),
             capacity,
             refill_rate: refill_per_sec,
-            refill_interval: Duration::from_secs(1),
         }
     }
 
