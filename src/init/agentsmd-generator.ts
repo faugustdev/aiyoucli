@@ -237,15 +237,14 @@ task(
 
 /**
  * Generate an AGENTS.md file in the given project root.
- * Will not overwrite an existing file unless the caller has
- * confirmed via a --force flag (not handled here).
+ * Will not overwrite an existing file unless `force` is true.
  *
  * @returns Absolute path to the generated file.
  */
-export async function generateAgentsMd(projectRoot: string): Promise<string> {
+export async function generateAgentsMd(projectRoot: string, force = false): Promise<string> {
   const outPath = join(projectRoot, "AGENTS.md");
 
-  if (existsSync(outPath)) {
+  if (existsSync(outPath) && !force) {
     throw new Error(
       `AGENTS.md already exists at ${outPath}. Use --force to overwrite.`
     );

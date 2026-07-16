@@ -165,6 +165,10 @@ export class Spinner {
   fail(text?: string): void {
     this.stop(color.red("FAIL") + ` ${text ?? this.text}`);
   }
+
+  warn(text?: string): void {
+    this.stop(color.yellow("WARN") + ` ${text ?? this.text}`);
+  }
 }
 
 // ── Util ────────────────────────────────────────────────────────

@@ -123,7 +123,7 @@ const initCommand: Command = {
 
     // 1. Generate AGENTS.md (always)
     try {
-      const agentsMdPath = await generateAgentsMd(cwd);
+      const agentsMdPath = await generateAgentsMd(cwd, ctx.flags.force as boolean);
       created.push(agentsMdPath);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -150,12 +150,32 @@ const initCommand: Command = {
       output.log(`  ${color.green("+")} ${path.replace(cwd + "/", "")}`);
     }
 
-    // 3. Show aiyou-team status hint if OpenCode target
+    // 3. Auto-install aiyou-team if OpenCode target and not already installed
     if (!targets || targets.includes("opencode")) {
       const teamStatus = checkAiyouTeamStatus();
       if (!teamStatus.installed) {
         output.log("");
-        output.log(`  ${color.yellow("★")} aiyou-team not installed. Run ${color.cyan("aiyoucli setup")} to enable agent teams.`);
+        const teamSpinner = output.spinner("Installing aiyou-team (required for OpenCode plugin)...");
+        teamSpinner.start();
+        try {
+          const setupResult = await setupAiyouTeam({
+            verbose: ctx.flags.verbose as boolean,
+          });
+          if (setupResult.setupRan) {
+            teamSpinner.succeed(`aiyou-team ${setupResult.installed ? "installed" : "configured"} — ${setupResult.teamsConfigured.join(", ")}`);
+          } else if (setupResult.installed) {
+            teamSpinner.succeed("aiyou-team installed");
+            output.log(`  ${color.yellow("★")} Run ${color.cyan("aiyoucli setup")} to complete team configuration.`);
+          } else {
+            teamSpinner.warn("aiyou-team auto-install failed");
+            output.log(`  ${color.yellow("★")} Run ${color.cyan("aiyoucli setup")} manually to enable agent teams.`);
+          }
+        } catch (err) {
+          teamSpinner.warn("aiyou-team auto-install failed");
+          output.log(`  ${color.yellow("★")} Run ${color.cyan("aiyoucli setup")} to enable agent teams.`);
+        }
+      } else {
+        output.log(`  ${color.green("✓")} aiyou-team ${color.dim(`(via ${teamStatus.via})`)}`);
       }
     }
 
