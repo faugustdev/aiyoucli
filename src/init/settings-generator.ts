@@ -87,9 +87,10 @@ function buildClaudeMd(name: string, author: { name: string; email: string }): s
   return `@.aiyoucli/agents.dsi.toon
 
 Commits: ${author.name} <${author.email}>
-MCP: aiyoucli-mcp (configured in .mcp.json) — 87 tools across 23 categories
+MCP: aiyoucli-mcp (configured in .mcp.json) — 60 tools (8 consolidated + 2 discovery + 50 individual)
 Team: Use \`task\` tool with \`subagent_type\` to delegate to aiyou-team agents
   - coding-leader, coding-executor, codebase-explorer, reviewer, web-researcher, principal-advisor, multimodal-looker
+Discovery: Call \`capabilities\` first to see NAPI features, aiyouvector, aiyou-team status
 Build: npm install && npm run build
 Test: npm test
 `;
@@ -128,8 +129,9 @@ function buildGeminiMd(name: string, author: { name: string; email: string }): s
   return `See .aiyoucli/agents.dsi.toon for project instructions (dense format).
 
 Commits: ${author.name} <${author.email}>
-MCP: aiyoucli-mcp — 87 tools across 23 categories
+MCP: aiyoucli-mcp — 60 tools (8 consolidated + 2 discovery + 50 individual)
 Team: aiyou-team agents available via task delegation
+Discovery: Call \`capabilities\` to see NAPI features, aiyouvector, aiyou-team status
 Status: aiyoucli statusline
 Skills: TOON-distilled in .aiyoucli/skills/
 `;
@@ -168,8 +170,9 @@ function buildOpenCodeMd(name: string, author: { name: string; email: string }):
   return `See AGENTS.md for project instructions.
 
 Commits: ${author.name} <${author.email}>
-MCP: aiyoucli-mcp (configured in opencode.json) — 87 tools across 23 categories
+MCP: aiyoucli-mcp (configured in opencode.json) — 60 tools (8 consolidated + 2 discovery + 50 individual)
 Team: @aiyou-dev/team plugin — 8 coding-team agents for delegation
+Discovery: Call \`capabilities\` to see NAPI features, aiyouvector, aiyou-team status
 Status: aiyoucli statusline
 Skills: TOON-distilled in .aiyoucli/skills/
 `;

@@ -76,6 +76,12 @@ ${lintCmd.startsWith("#") ? lintCmd : `npm run lint    # ${lintCmd}`}
   const agentInstructions = `
 ## Agent Instructions
 
+### Discovery (check what's available)
+
+Before starting work, discover what aiyoucli exposes:
+- \`capabilities\` — reports NAPI features, aiyouvector integration, aiyou-team availability, embed server status
+- \`version\` — version info for aiyoucli, aiyouvector, aiyou-team, runtime env
+
 ### Memory
 
 Persistent vector memory via Rust NAPI (HNSW index, SIMD-accelerated):
@@ -83,8 +89,12 @@ Persistent vector memory via Rust NAPI (HNSW index, SIMD-accelerated):
 - \`memory_store\` — store a vector with optional ID and metadata
 - \`memory_search\` — semantic similarity search (top-k, default 5)
 - \`memory_count\` — get number of stored vectors
-- \`memory_stats\` — database statistics (dimensions, HNSW config)
 - \`memory_delete\` — delete a vector by ID
+
+### Stats (consolidated)
+
+Get statistics for any subsystem in one tool:
+- \`stats\` with \`scope: memory|agents|routing|neural|semantic|cache|full\`
 
 ### Neural Learning (SONA)
 
@@ -92,16 +102,18 @@ Continuous learning without catastrophic forgetting via MicroLoRA adapters:
 - \`neural_observe\` — submit observation (embedding + quality score)
 - \`neural_transform\` — transform embedding through learned LoRA weights
 - \`neural_learn\` — force background learning on buffered observations
-- \`neural_stats\` — engine statistics (trajectories, signals)
 
 ### Hooks & Routing
 
 Lifecycle hooks with Q-learning task routing:
 - \`hooks_pre_task\` — pre-task hook: routing recommendation, auto-start local models
 - \`hooks_post_task\` — post-task hook: record reward in Q-table, persist to disk
-- \`hooks_route\` — route task to optimal agent type via Q-learning
-- \`hooks_model_route\` — select model tier (haiku/sonnet/opus) for cost optimization
-- \`hooks_stats\` — routing engine statistics
+- \`route\` — unified routing: \`action: qlearn|model_tier|keyword|hybrid|enhanced\`
+
+### Status (consolidated)
+
+Get system status in one tool:
+- \`status\` with \`scope: system|coordination|statusline|swarm\`
 
 ### Deep Research (NAPI-powered)
 
@@ -115,31 +127,48 @@ Multi-engine web research with Rust NAPI orchestration:
 `;
 
   const mcpTools = `
-## Available MCP Tools (87)
+## Available MCP Tools (60)
+
+8 consolidated tools (replacing 29 redundant) + 2 discovery tools + 50 individual tools.
+
+### Consolidated tools (use \`action\` / \`scope\` / \`mode\` / \`type\` param)
+
+| Tool | Replaces | Dispatch |
+|------|----------|----------|
+| \`route\` | hooks_route, hooks_model_route, semantic_route, semantic_route_hybrid, semantic_route_enhanced | \`action: qlearn\|model_tier\|keyword\|hybrid\|enhanced\` |
+| \`status\` | system_status, coordination_status, statusline, swarm_status | \`scope: system\|coordination\|statusline\|swarm\` |
+| \`stats\` | memory_stats, agent_metrics, hooks_stats, neural_stats, semantic_stats, proxy_cache_stats, metrics_snapshot | \`scope: memory\|agents\|routing\|neural\|semantic\|cache\|full\` |
+| \`metrics\` | metrics_record_tokens, cost, memory, latency, tools_summary, save, reset | \`action: record_tokens\|cost\|memory\|latency\|tools_summary\|save\|reset\` |
+| \`embed\` | proxy_embed, semantic_embed | \`type: onnx\|keyword\` |
+| \`models\` | models_list, models_optimize, models_start, models_stop, models_status, proxy_list_models | \`action: list\|optimize\|start\|stop\|status\|list_remote\` |
+| \`analyze\` | analyze_diff, analyze_commit, analyze_complexity | \`type: diff\|commit\|complexity\` |
+| \`ast\` | ast_analyze, ast_analyze_batch, ast_detect_language | \`mode: analyze\|batch\|detect\` |
+
+### Discovery tools (expose aiyouvector + aiyou-team to MCP clients)
+
+| Tool | Description |
+|------|-------------|
+| \`capabilities\` | Reports NAPI features, aiyouvector integration, aiyou-team availability, embed server status |
+| \`version\` | Version info for aiyoucli, aiyouvector, aiyou-team, runtime env |
+
+### Individual tools by category
 
 | Category | Count | Tools |
 |----------|-------|-------|
-| Memory | 6 | memory_init, memory_store, memory_search, memory_count, memory_stats, memory_delete |
-| Agent | 6 | agent_spawn, agent_list, agent_status, agent_stop, agent_record, agent_metrics |
-| Swarm | 3 | swarm_init, swarm_status, swarm_stop |
+| Memory | 5 | memory_init, memory_store, memory_search, memory_count, memory_delete |
+| Agent | 5 | agent_spawn, agent_list, agent_status, agent_stop, agent_record |
+| Swarm | 2 | swarm_init, swarm_stop |
 | Task | 4 | task_create, task_list, task_status, task_complete |
 | Session | 3 | session_start, session_end, session_list |
-| Hooks | 5 | hooks_pre_task, hooks_post_task, hooks_route, hooks_model_route, hooks_stats |
+| Hooks | 2 | hooks_pre_task, hooks_post_task |
 | Config | 2 | config_get, config_set |
-| System | 2 | system_status, system_doctor |
-| Analyze | 3 | analyze_diff, analyze_commit, analyze_complexity |
-| Neural | 4 | neural_observe, neural_transform, neural_learn, neural_stats |
+| System | 1 | system_doctor |
+| Neural | 3 | neural_observe, neural_transform, neural_learn |
 | Security | 1 | security_scan |
 | Performance | 1 | perf_benchmark |
-| Coordination | 1 | coordination_status |
-| Statusline | 1 | statusline |
-| Metrics | 8 | metrics_snapshot, metrics_record_tokens, metrics_cost, metrics_memory, metrics_latency, metrics_tools_summary, metrics_save, metrics_reset |
 | Distiller | 2 | distill_markdown, distill_file |
 | Skills | 3 | skills_sync, skills_list, skills_detect |
-| Proxy | 10 | proxy_health, proxy_chat, proxy_compress, proxy_shield_check, proxy_embed, proxy_cache_stats, proxy_list_models, proxy_estimate_cost, proxy_analyze_text, proxy_segment |
-| AST | 3 | ast_analyze, ast_analyze_batch, ast_detect_language |
-| Semantic | 5 | semantic_route, semantic_route_hybrid, semantic_route_enhanced, semantic_embed, semantic_stats |
-| Models | 5 | models_list, models_optimize, models_start, models_stop, models_status |
+| Proxy | 7 | proxy_health, proxy_chat, proxy_compress, proxy_shield_check, proxy_estimate_cost, proxy_analyze_text, proxy_segment |
 | Deep Research | 8 | rd_init, rd_search, rd_strategies, rd_status, rd_report, rd_knowledge_graph, rd_document_process, rd_citations |
 | GCC | 1 | git_context |
 `;
