@@ -201,7 +201,7 @@ task(
 - Run tests after code changes; verify build before committing
 `;
 
-  return [header, desc, buildSection, codeStyle, agentInstructions, mcpTools, conventions]
+  return [header, desc, buildSection, codeStyle, agentInstructions, mcpTools, aiyouTeam, conventions]
     .join("")
     .trimEnd() + "\n";
 }
