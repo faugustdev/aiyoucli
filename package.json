@@ -1,6 +1,6 @@
 {
   "name": "@aiyou-dev/cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI agent CLI with Rust-powered vector intelligence",
   "type": "module",
   "main": "dist/index.js",
