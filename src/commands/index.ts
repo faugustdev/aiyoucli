@@ -216,9 +216,9 @@ const initCommand: Command = {
 
     // 3b. Phase 3 — Warmup: initialize vector memory, graph, q-table, swarm, agents, proxy health
     let warmupReport: WarmupReport | null = null;
-    const skipIndex = ctx.flags["skip-index"] as boolean;
-    const skipTeam = ctx.flags["skip-team"] as boolean;
-    const skipProxy = ctx.flags["skip-proxy"] as boolean;
+    const skipIndex = ctx.flags.skipIndex as boolean;
+    const skipTeam = ctx.flags.skipTeam as boolean;
+    const skipProxy = ctx.flags.skipProxy as boolean;
 
     // Warmup runs for opencode target or when no specific target is set
     if (!targets || targets.includes("opencode")) {

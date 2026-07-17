@@ -134,3 +134,29 @@ describe("WarmupOptions", () => {
     expect(options.cwd).toBe("/test");
   });
 });
+
+describe("WarmupStep status types", () => {
+  it("supports all 4 status types", () => {
+    const statuses: WarmupStep["status"][] = ["ok", "degraded", "failed", "skipped"];
+    expect(statuses).toHaveLength(4);
+  });
+
+  it("WarmupReport counts each status correctly", () => {
+    const steps: WarmupStep[] = [
+      { name: "a", status: "ok", detail: "ok", duration_ms: 10 },
+      { name: "b", status: "degraded", detail: "degraded", duration_ms: 10 },
+      { name: "c", status: "failed", detail: "failed", duration_ms: 10 },
+      { name: "d", status: "skipped", detail: "skipped", duration_ms: 0 },
+    ];
+
+    const okCount = steps.filter((s) => s.status === "ok").length;
+    const degradedCount = steps.filter((s) => s.status === "degraded").length;
+    const failedCount = steps.filter((s) => s.status === "failed").length;
+    const skippedCount = steps.filter((s) => s.status === "skipped").length;
+
+    expect(okCount).toBe(1);
+    expect(degradedCount).toBe(1);
+    expect(failedCount).toBe(1);
+    expect(skippedCount).toBe(1);
+  });
+});

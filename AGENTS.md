@@ -134,6 +134,12 @@ aiyoucli/
     init/
       agentsmd-generator.ts           # Generates AGENTS.md (universal standard)
       settings-generator.ts           # Generates CLAUDE.md, GEMINI.md, .claude/settings.json, statusline.cjs
+      wire-validate.ts                # Phase 2 — Environment probe (node, git, napi, aiyou-team)
+      verify.ts                       # Phase 4 — Health verification (doctor, NAPI, capabilities)
+      warmup.ts                       # Phase 3 — Warmup orchestrator (memory, graph, q-table, swarm, agents, proxy, rd, skills, index)
+      indexer-chunk.ts                # File chunking (2000 chars + 200 overlap)
+      indexer-embed.ts                # Parallel embedding + storage (max 8 concurrent)
+      indexer-auto.ts                 # Git-aware auto-indexer with manifest tracking
 
     services/
       worker-daemon.ts                # EventEmitter-based background worker daemon
@@ -154,13 +160,18 @@ aiyoucli/
     napi-smoke.ts                     # Vector DB smoke test
     napi-phase3-smoke.ts              # SONA + Attention + Graph tests (13 tests)
     napi-phase4-smoke.ts              # Routing + Analysis tests (13 tests)
+    verify.test.ts                    # Phase 4 verify report rendering tests
+    wire-validate.test.ts             # Phase 2 wire validation tests
+    warmup.test.ts                    # Phase 3 warmup orchestrator tests
+    indexer-chunk.test.ts             # File chunking tests
+    indexer-auto.test.ts              # Git-aware auto-indexer tests
 ```
 
 ## CLI Commands (23)
 
 | Command | Subcommands | What it does |
 |---------|-------------|--------------|
-| `init` | | Generate AGENTS.md, CLAUDE.md, GEMINI.md, settings, statusline |
+| `init` | | Generate AGENTS.md, CLAUDE.md, GEMINI.md, settings, statusline (4-phase: wire → write → warm → verify) |
 | `agent` | spawn, list, status, stop, record, metrics | Agent lifecycle management |
 | `swarm` | init, status, stop | Multi-agent swarm coordination |
 | `memory` | init, store, search, list, stats, delete | Vector memory via Rust NAPI |
@@ -306,6 +317,45 @@ Integrates with:
 - MCP tools are the business logic layer — CLI commands are thin wrappers that call tools
 - NAPI functions handle all compute-intensive work — TypeScript handles I/O and formatting
 
+## Init Phases
+
+`aiyoucli init` runs 4 phases in sequence. Each phase is independent — failures in later phases don't block earlier progress.
+
+| Phase | Name | Module | Purpose |
+|-------|------|--------|---------|
+| 1 | Write | `agentsmd-generator.ts`, `settings-generator.ts` | Generate AGENTS.md, CLAUDE.md, GEMINI.md, settings, statusline |
+| 2 | Wire | `wire-validate.ts` | Probe node, git, napi, aiyou-team binaries (read-only) |
+| 2b | Team Setup | `team-setup.ts` | Auto-install aiyou-team if missing |
+| 3 | Warmup | `warmup.ts` | Initialize memory, graph, q-table, swarm, agents, proxy health, skills detect, auto-index |
+| 4 | Verify | `verify.ts` | Aggregate health signals (doctor, capabilities, coordination, memory) |
+
+### Phase 3 — Warmup Steps
+
+The warmup orchestrator runs the following 10 steps (each independent — failures don't block others):
+
+1. `memory_init` — Initialize HNSW 384-dim vector memory
+2. `graph_bootstrap` — Bootstrap knowledge graph with project + agents
+3. `q_table_seed` — Seed Q-Learning routing table with 24 entries
+4. `swarm_init` — Initialize hierarchical swarm (5 agents)
+5. `agent_spawn:coder`, `agent_spawn:researcher`, `agent_spawn:reviewer` — Spawn 3 baseline agents
+6. `neural_observe` — Submit baseline SONA observation
+7. `proxy_health`, `proxy_shield_check` — Proxy engine health checks
+8. `rd_strategies` — List deep research strategies
+9. `skills_detect` — Detect project technologies
+10. `auto_index` — Git-aware project indexing (idempotent via manifest)
+
+### Init Flags
+
+| Flag | Purpose |
+|------|---------|
+| `--force` / `-f` | Overwrite existing files |
+| `--skip-skills` | Skip interactive skills setup |
+| `--skip-verify` | Skip Phase 4 verification probes (faster init, no MCP calls) |
+| `--skip-index` | Skip Phase 3 auto-indexing |
+| `--skip-team` | Skip Phase 3 team/swarm initialization |
+| `--skip-proxy` | Skip Phase 3 proxy health checks |
+| `--tool` / `-t` | Tools to configure: claude, gemini, opencode, all |
+
 ## File Persistence
 
 State is stored in `.aiyoucli/` in the project root:
@@ -319,6 +369,8 @@ State is stored in `.aiyoucli/` in the project root:
   helpers/statusline.cjs  # Standalone statusline script
   config.json             # Project config (optional)
   q-table.json            # Q-Learning persistence (auto-saved)
+  vectors.redb            # Vector memory database (HNSW 384-dim)
+  index-manifest.json     # Auto-indexer manifest (commit + chunk counts)
   metrics/                # Metrics snapshots
   skills/                 # TOON-distilled skill files
 ```

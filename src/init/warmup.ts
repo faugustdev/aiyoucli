@@ -265,11 +265,22 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
             return { ok: false, detail: result.content[0]?.text ?? "Unknown error" };
           }
           
-          const data = JSON.parse(result.content[0]?.text ?? "{}");
-          return {
-            ok: data.healthy ?? false,
-            detail: data.healthy ? "Proxy healthy" : "Proxy unhealthy",
-          };
+          const text = result.content[0]?.text ?? "";
+          // Proxy might return text instead of JSON in some states
+          try {
+            const data = JSON.parse(text);
+            return {
+              ok: data.healthy ?? false,
+              detail: data.healthy ? "Proxy healthy" : "Proxy unhealthy",
+            };
+          } catch {
+            // Text response - treat as degraded if it mentions "not" or "unavailable"
+            const isHealthy = !/not\s+avail|unhealthy|down|unavailable/i.test(text);
+            return {
+              ok: isHealthy,
+              detail: text.substring(0, 60) || "Proxy responded",
+            };
+          }
         },
         onProgress
       )
@@ -318,11 +329,22 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
           return { ok: false, detail: result.content[0]?.text ?? "Unknown error" };
         }
         
-        const data = JSON.parse(result.content[0]?.text ?? "[]");
-        return {
-          ok: true,
-          detail: `${data.length} strategies available`,
-        };
+        const text = result.content[0]?.text ?? "";
+        // rd_strategies might return text or JSON array
+        try {
+          const data = JSON.parse(text);
+          if (Array.isArray(data)) {
+            return { ok: true, detail: `${data.length} strategies available` };
+          }
+          return { ok: true, detail: "Strategies listed" };
+        } catch {
+          // Text response - count strategy names if possible
+          const count = (text.match(/^\s*[-*]\s+/gm) || []).length;
+          return {
+            ok: true,
+            detail: count > 0 ? `${count} strategies available` : "Strategies listed",
+          };
+        }
       },
       onProgress
     )
