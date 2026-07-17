@@ -6,7 +6,7 @@
  * manifest exists. This makes indexing idempotent and fast on subsequent runs.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { chunkFilesFromDisk } from "./indexer-chunk.js";
@@ -127,9 +127,6 @@ export function writeManifest(cwd: string, manifest: IndexManifest): void {
  * @returns Array of absolute file paths
  */
 export function scanProjectFiles(cwd: string): string[] {
-  const { readdirSync, statSync } = require("node:fs");
-  const { join } = require("node:path");
-  
   const EXCLUDE_DIRS = new Set([
     "node_modules",
     ".git",
