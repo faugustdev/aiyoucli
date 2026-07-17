@@ -12,13 +12,16 @@ pub struct EmbeddingRequest {
 #[derive(Debug, Deserialize)]
 pub struct EmbeddingResponse {
     pub data: Vec<EmbeddingData>,
+    #[allow(dead_code)]
     pub model: Option<String>,
+    #[allow(dead_code)]
     pub usage: Option<super::llm::Usage>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct EmbeddingData {
     pub embedding: Vec<f64>,
+    #[allow(dead_code)]
     pub index: u32,
 }
 

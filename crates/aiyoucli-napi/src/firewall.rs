@@ -65,6 +65,7 @@ impl RateLimiter {
 }
 
 pub struct Firewall {
+    #[allow(dead_code)]
     rules: Vec<FirewallRule>,
     rate_limiter: RateLimiter,
     blocked_origins: Vec<String>,
@@ -143,6 +144,7 @@ impl Firewall {
         self.blocked_origins.retain(|o| o != origin);
     }
 
+    #[allow(dead_code)]
     pub fn rules(&self) -> &[FirewallRule] {
         &self.rules
     }

@@ -46,6 +46,7 @@ impl LlmProvider {
         Self { config, client }
     }
 
+    #[allow(dead_code)]
     pub fn config(&self) -> &ProviderConfig {
         &self.config
     }
@@ -94,6 +95,7 @@ impl LlmProvider {
     }
 
     /// Stream a chat completion (returns a stream of chunks).
+    #[allow(dead_code)]
     pub async fn chat_completion_stream(
         &self,
         messages: Vec<ChatMessage>,

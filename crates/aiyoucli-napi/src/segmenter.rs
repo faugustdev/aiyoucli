@@ -105,6 +105,7 @@ impl Segmenter {
     }
 
     /// Split text by token count (estimated).
+    #[allow(dead_code)]
     pub fn by_tokens(text: &str, max_tokens: usize, overlap_tokens: usize) -> SegmentationResult {
         // Estimate: each token ~4 chars, but use the overlap as char offset
         let chunk_chars = max_tokens * 4;

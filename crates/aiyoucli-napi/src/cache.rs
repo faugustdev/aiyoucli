@@ -81,6 +81,7 @@ impl ResponseCache {
     }
 
     /// Invalidate a specific cache entry.
+    #[allow(dead_code)]
     pub fn invalidate(&self, key: &str) -> bool {
         self.store.lock().remove(key).is_some()
     }

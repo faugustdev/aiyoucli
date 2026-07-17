@@ -25,6 +25,7 @@ pub struct ProviderRestrictions {
 }
 
 pub struct Restrictions {
+    #[allow(dead_code)]
     providers: HashMap<String, ProviderRestrictions>,
     models: HashMap<String, ModelInfo>,
 }
@@ -137,10 +138,12 @@ impl Restrictions {
         Self { providers, models }
     }
 
+    #[allow(dead_code)]
     pub fn get_model(&self, name: &str) -> Option<&ModelInfo> {
         self.models.get(name)
     }
 
+    #[allow(dead_code)]
     pub fn get_provider(&self, name: &str) -> Option<&ProviderRestrictions> {
         self.providers.get(name)
     }
