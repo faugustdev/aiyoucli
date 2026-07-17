@@ -1,15 +1,95 @@
 /**
  * Generates an AGENTS.md file following the agents.md universal standard.
- * Detects project metadata from package.json when available.
+ * Detects project metadata from package.json (root, or monorepo sub-package).
  */
 
-import { writeFileSync, existsSync, readFileSync, mkdirSync } from "node:fs";
-import { join, basename, dirname } from "node:path";
+import { writeFileSync, existsSync, readFileSync, mkdirSync, statSync, readdirSync } from "node:fs";
+import { join, basename, dirname, sep } from "node:path";
+import { checkAiyouTeamStatus } from "./team-setup.js";
 
-interface ProjectInfo {
+// ── Types ───────────────────────────────────────────────────────
+
+export interface ProjectInfo {
   name: string;
   description: string;
   scripts: Record<string, string>;
+  /** Absolute path to the package.json that was detected (root or sub-package). */
+  source: "root" | "monorepo";
+  /** Relative path from project root to the package.json (only when source === "monorepo"). */
+  packageRelPath?: string;
+}
+
+export interface GenerateAgentsMdOptions {
+  /** Force overwrite if AGENTS.md already exists. */
+  force?: boolean;
+  /** Project root for monorepo detection (defaults to projectRoot). */
+  cwd?: string;
+}
+
+export interface GenerateAgentsMdResult extends FileWriteResultLite {
+  /** True if aiyou-team plugin was detected (affects content of AGENTS.md). */
+  aiyouTeamInstalled: boolean;
+}
+
+interface FileWriteResultLite {
+  path: string;
+  status: "created" | "updated" | "skipped";
+  diff?: { previousBytes: number; newBytes: number };
+}
+
+// ── Monorepo detection ──────────────────────────────────────────
+
+const MONOREPO_HINTS = ["apps", "packages", "services", "modules", "libs", "tools"];
+
+/**
+ * Walk into common monorepo directories looking for the first package.json with
+ * build/test/dev/lint scripts. Bounded depth and breadth to avoid pathological walks.
+ */
+function detectMonorepoPackage(projectRoot: string): ProjectInfo | null {
+  for (const hint of MONOREPO_HINTS) {
+    const base = join(projectRoot, hint);
+    if (!existsSync(base)) continue;
+
+    let entries: string[];
+    try {
+      entries = readdirSync(base);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const subdir = join(base, entry);
+      // Only consider direct child directories (depth 2 from projectRoot)
+      try {
+        if (!statSync(subdir).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      const pkgPath = join(subdir, "package.json");
+      if (!existsSync(pkgPath)) continue;
+
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+        const scripts = pkg.scripts ?? {};
+        // Prefer packages with at least one meaningful script
+        if (pkg.name && (scripts.build || scripts.test || scripts.dev || scripts.lint)) {
+          return {
+            name: pkg.name,
+            description: pkg.description ?? "",
+            scripts,
+            source: "monorepo",
+            packageRelPath: pkgPath
+              .replace(projectRoot + sep, "")
+              .replace(/\/package\.json$/, ""),
+          };
+        }
+      } catch {
+        // Skip malformed package.json
+      }
+    }
+  }
+  return null;
 }
 
 function detectProject(projectRoot: string): ProjectInfo {
@@ -23,17 +103,23 @@ function detectProject(projectRoot: string): ProjectInfo {
         name: pkg.name ?? fallbackName,
         description: pkg.description ?? "",
         scripts: pkg.scripts ?? {},
+        source: "root",
       };
     } catch {
-      // Malformed package.json — fall through
+      // Malformed root package.json — fall through to monorepo detection
     }
   }
 
-  return { name: fallbackName, description: "", scripts: {} };
+  const monorepo = detectMonorepoPackage(projectRoot);
+  if (monorepo) return monorepo;
+
+  return { name: fallbackName, description: "", scripts: {}, source: "root" };
 }
 
-function buildContent(project: ProjectInfo): string {
-  const { name, description, scripts } = project;
+// ── Content builders ────────────────────────────────────────────
+
+function buildContent(project: ProjectInfo, aiyouTeamInstalled: boolean): string {
+  const { name, description, scripts, source, packageRelPath } = project;
 
   const buildCmd = scripts.build ?? "# no build step detected";
   const testCmd = scripts.test ?? "# no test command detected";
@@ -43,10 +129,15 @@ function buildContent(project: ProjectInfo): string {
   const header = `# AGENTS.md — ${name}\n`;
   const desc = description ? `\n${description}\n` : "";
 
+  const sourceHint =
+    source === "monorepo" && packageRelPath
+      ? `\n> Detected from monorepo package: \`${packageRelPath}/package.json\`\n`
+      : "";
+
   const buildSection = `
 ## Build & Run
 
-\`\`\`bash
+${source ? "" : ""}\`\`\`bash
 # Build
 ${buildCmd.startsWith("#") ? buildCmd : `npm run build   # ${buildCmd}`}
 
@@ -135,14 +226,14 @@ Multi-engine web research with Rust NAPI orchestration:
 
 | Tool | Replaces | Dispatch |
 |------|----------|----------|
-| \`route\` | hooks_route, hooks_model_route, semantic_route, semantic_route_hybrid, semantic_route_enhanced | \`action: qlearn\|model_tier\|keyword\|hybrid\|enhanced\` |
-| \`status\` | system_status, coordination_status, statusline, swarm_status | \`scope: system\|coordination\|statusline\|swarm\` |
-| \`stats\` | memory_stats, agent_metrics, hooks_stats, neural_stats, semantic_stats, proxy_cache_stats, metrics_snapshot | \`scope: memory\|agents\|routing\|neural\|semantic\|cache\|full\` |
-| \`metrics\` | metrics_record_tokens, cost, memory, latency, tools_summary, save, reset | \`action: record_tokens\|cost\|memory\|latency\|tools_summary\|save\|reset\` |
-| \`embed\` | proxy_embed, semantic_embed | \`type: onnx\|keyword\` |
-| \`models\` | models_list, models_optimize, models_start, models_stop, models_status, proxy_list_models | \`action: list\|optimize\|start\|stop\|status\|list_remote\` |
-| \`analyze\` | analyze_diff, analyze_commit, analyze_complexity | \`type: diff\|commit\|complexity\` |
-| \`ast\` | ast_analyze, ast_analyze_batch, ast_detect_language | \`mode: analyze\|batch\|detect\` |
+| \`route\` | hooks_route, hooks_model_route, semantic_route, semantic_route_hybrid, semantic_route_enhanced | \`action: qlearn|model_tier|keyword|hybrid|enhanced\` |
+| \`status\` | system_status, coordination_status, statusline, swarm_status | \`scope: system|coordination|statusline|swarm\` |
+| \`stats\` | memory_stats, agent_metrics, hooks_stats, neural_stats, semantic_stats, proxy_cache_stats, metrics_snapshot | \`scope: memory|agents|routing|neural|semantic|cache|full\` |
+| \`metrics\` | metrics_record_tokens, cost, memory, latency, tools_summary, save, reset | \`action: record_tokens|cost|memory|latency|tools_summary|save|reset\` |
+| \`embed\` | proxy_embed, semantic_embed | \`type: onnx|keyword\` |
+| \`models\` | models_list, models_optimize, models_start, models_stop, models_status, proxy_list_models | \`action: list|optimize|start|stop|status|list_remote\` |
+| \`analyze\` | analyze_diff, analyze_commit, analyze_complexity | \`type: diff|commit|complexity\` |
+| \`ast\` | ast_analyze, ast_analyze_batch, ast_detect_language | \`mode: analyze|batch|detect\` |
 
 ### Discovery tools (expose aiyouvector + aiyou-team to MCP clients)
 
@@ -173,7 +264,10 @@ Multi-engine web research with Rust NAPI orchestration:
 | GCC | 1 | git_context |
 `;
 
-  const aiyouTeam = `
+  // Conditional section: only include agent delegation table when the plugin is installed.
+  // Otherwise emit a clear warning so AGENTS.md never advertises non-existent agents.
+  const aiyouTeam = aiyouTeamInstalled
+    ? `
 ## aiyou-team Agent Delegation
 
 When the \`@aiyou-dev/team\` plugin is active, use the \`task\` tool with \`subagent_type\` to delegate work to specialized team members.
@@ -215,6 +309,27 @@ task(
   prompt="Review changes in src/auth/ for security issues..."
 )
 \`\`\`
+`
+    : `
+## aiyou-team Agent Delegation
+
+> ⚠️  **The \`@aiyou-dev/team\` plugin is not installed.**
+> The agents listed below (coding-leader, coding-executor, etc.) are NOT currently
+> available in this OpenCode session. Run \`aiyoucli setup\` to install the plugin,
+> then regenerate this file with \`aiyoucli init --force\` to load the agent table.
+
+| Agent | Role | Status |
+|-------|------|--------|
+| \`coding-leader\` | Execution-first orchestrator | ❌ plugin not installed |
+| \`coordination-leader\` | Plan-first coordinator | ❌ plugin not installed |
+| \`coding-executor\` | Direct implementation | ❌ plugin not installed |
+| \`codebase-explorer\` | Read-only code search | ❌ plugin not installed |
+| \`web-researcher\` | External docs research | ❌ plugin not installed |
+| \`reviewer\` | Code review gate | ❌ plugin not installed |
+| \`principal-advisor\` | Strategic advisory | ❌ plugin not installed |
+| \`multimodal-looker\` | Visual interpretation | ❌ plugin not installed |
+
+Install with: \`npm install -g @aiyou-dev/team && aiyou-team setup\`
 `;
 
   const conventions = `
@@ -230,32 +345,56 @@ task(
 - Run tests after code changes; verify build before committing
 `;
 
-  return [header, desc, buildSection, codeStyle, agentInstructions, mcpTools, aiyouTeam, conventions]
+  return [header, desc, sourceHint, buildSection, codeStyle, agentInstructions, mcpTools, aiyouTeam, conventions]
     .join("")
     .trimEnd() + "\n";
 }
 
+// ── Main ────────────────────────────────────────────────────────
+
 /**
  * Generate an AGENTS.md file in the given project root.
- * Will not overwrite an existing file unless `force` is true.
  *
- * @returns Absolute path to the generated file.
+ * Behaviour:
+ *   - If AGENTS.md does not exist → write generated content, return "created".
+ *   - If AGENTS.md exists and `force` is true → overwrite, return "updated".
+ *   - If AGENTS.md exists and `force` is false → throw (caller catches & skips).
+ *
+ * The aiyou-team section is conditionally rendered based on plugin availability,
+ * so AGENTS.md never lies about installed agents.
  */
-export async function generateAgentsMd(projectRoot: string, force = false): Promise<string> {
+export async function generateAgentsMd(
+  projectRoot: string,
+  opts: GenerateAgentsMdOptions = {}
+): Promise<GenerateAgentsMdResult> {
   const outPath = join(projectRoot, "AGENTS.md");
+  const previousBytes = existsSync(outPath) ? safeStat(outPath) : 0;
 
-  if (existsSync(outPath) && !force) {
+  if (existsSync(outPath) && !opts.force) {
     throw new Error(
       `AGENTS.md already exists at ${outPath}. Use --force to overwrite.`
     );
   }
 
   const project = detectProject(projectRoot);
-  const content = buildContent(project);
+  const aiyouTeamInstalled = checkAiyouTeamStatus().installed;
+  const content = buildContent(project, aiyouTeamInstalled);
 
-  // Ensure the directory exists (no-op for project root, but safe)
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, content, "utf-8");
 
-  return outPath;
+  return {
+    path: outPath,
+    status: previousBytes === 0 ? "created" : "updated",
+    diff: previousBytes === 0 ? undefined : { previousBytes, newBytes: safeStat(outPath) },
+    aiyouTeamInstalled,
+  };
+}
+
+function safeStat(p: string): number {
+  try {
+    return statSync(p).size;
+  } catch {
+    return 0;
+  }
 }

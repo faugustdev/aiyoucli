@@ -9,8 +9,38 @@ import { loadConfig } from "./config.js";
 import { suggestCommand } from "./suggest.js";
 import { commands } from "./commands/index.js";
 import { handleError } from "./production/error-handler.js";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const VERSION = "0.1.0";
+/**
+ * Resolve the package.json that lives next to the compiled `dist/` output,
+ * walking up at most 5 levels to handle monorepo / npm-link layouts.
+ * Falls back to a sentinel string when resolution fails (e.g. running from
+ * source without a build) so the CLI can still print *something*.
+ */
+function resolveVersion(): string {
+  const FALLBACK = "0.0.0-dev";
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    let dir = here;
+    for (let i = 0; i < 5; i++) {
+      const candidate = join(dir, "package.json");
+      if (existsSync(candidate)) {
+        const parsed = JSON.parse(readFileSync(candidate, "utf-8"));
+        if (parsed.name === "@aiyou-dev/cli" && typeof parsed.version === "string") {
+          return parsed.version;
+        }
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {}
+  return FALLBACK;
+}
+
+const VERSION = resolveVersion();
 
 export interface CLIOptions {
   name?: string;

@@ -10,7 +10,13 @@ import { output, color } from "../output.js";
 import { registerAllTools } from "../mcp/tools/index.js";
 import { startMCPServer } from "../mcp/server.js";
 import { generateAgentsMd } from "../init/agentsmd-generator.js";
-import { generateSettings, parseToolTargets, type ToolTarget } from "../init/settings-generator.js";
+import {
+  generateSettings,
+  parseToolTargets,
+  type ToolTarget,
+  type FileWriteResult,
+  type FileWriteStatus,
+} from "../init/settings-generator.js";
 import { interactiveInit } from "../init/interactive.js";
 import { renderStatusline, generateStatuslineScript } from "../statusline/generator.js";
 import { startInteractive, stopInteractive, showStatus } from "../models/manager.js";
@@ -62,6 +68,27 @@ function printJson(result: MCPToolResult): void {
 }
 
 // ── 1. init ────────────────────────────────────────────────────────
+
+const STATUS_SYMBOL: Record<FileWriteStatus, string> = {
+  created: "+",
+  merged: "~",
+  updated: "↻",
+  skipped: "·",
+};
+
+const STATUS_COLOR: Record<FileWriteStatus, (s: string) => string> = {
+  created: color.green,
+  merged: color.cyan,
+  updated: color.yellow,
+  skipped: color.dim,
+};
+
+function renderFileResult(result: FileWriteResult, cwd: string): string {
+  const sym = STATUS_COLOR[result.status](STATUS_SYMBOL[result.status]);
+  const rel = result.path.replace(cwd + "/", "");
+  const suffix = result.status === "skipped" ? color.dim(" (preserved)") : "";
+  return `  ${sym} ${rel}${suffix}`;
+}
 
 const TOOL_LABELS: Record<ToolTarget, string> = {
   claude: "Claude Code",
@@ -132,16 +159,32 @@ const initCommand: Command = {
     const spinner = output.spinner("Initializing project...");
     spinner.start();
 
-    const created: string[] = [];
+    const fileResults: FileWriteResult[] = [];
 
     // 1. Generate AGENTS.md (always)
     try {
-      const agentsMdPath = await generateAgentsMd(cwd, ctx.flags.force as boolean);
-      created.push(agentsMdPath);
+      const agentsMdResult = await generateAgentsMd(cwd, {
+        force: ctx.flags.force as boolean,
+        cwd,
+      });
+      // Warn when an existing AGENTS.md is being overwritten with significantly different content
+      if (agentsMdResult.diff) {
+        const { previousBytes, newBytes } = agentsMdResult.diff;
+        const ratio = previousBytes > 0 ? newBytes / previousBytes : 1;
+        if (ratio > 1.5 || ratio < 0.5) {
+          output.warn(
+            `AGENTS.md will be replaced: ${previousBytes}B → ${newBytes}B ` +
+              `(your customizations will be lost)`
+          );
+        }
+      }
+      fileResults.push(agentsMdResult);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("already exists") && !ctx.flags.force) {
         output.debug("AGENTS.md already exists, skipping");
+        // Surface at normal verbosity too, so the user understands why their file wasn't updated
+        output.info("AGENTS.md already exists (use --force to overwrite)");
       } else {
         spinner.fail(`Failed to generate AGENTS.md: ${msg}`);
         return { success: false, exitCode: 1 };
@@ -150,17 +193,41 @@ const initCommand: Command = {
 
     // 2. Generate tool-specific configs
     try {
-      const settingsPaths = await generateSettings(cwd, targets);
-      created.push(...settingsPaths);
+      const settingsResults = await generateSettings(cwd, targets, ctx.flags.force as boolean);
+      fileResults.push(...settingsResults);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       spinner.fail(`Failed to generate settings: ${msg}`);
       return { success: false, exitCode: 1 };
     }
 
-    spinner.succeed("Project initialized");
-    for (const path of created) {
-      output.log(`  ${color.green("+")} ${path.replace(cwd + "/", "")}`);
+    // Summarize: created/merged/updated = changes, skipped = no-op
+    const changes = fileResults.filter((r) => r.status !== "skipped").length;
+    const skipped = fileResults.filter((r) => r.status === "skipped").length;
+
+    if (changes === 0 && skipped > 0) {
+      spinner.succeed(
+        `Project already configured (${skipped} file${skipped === 1 ? "" : "s"} preserved)`
+      );
+    } else if (changes === 0 && skipped === 0) {
+      spinner.succeed("Project initialized");
+    } else {
+      const parts: string[] = [];
+      if (fileResults.some((r) => r.status === "created")) {
+        parts.push(`${fileResults.filter((r) => r.status === "created").length} created`);
+      }
+      if (fileResults.some((r) => r.status === "merged")) {
+        parts.push(`${fileResults.filter((r) => r.status === "merged").length} merged`);
+      }
+      if (fileResults.some((r) => r.status === "updated")) {
+        parts.push(`${fileResults.filter((r) => r.status === "updated").length} updated`);
+      }
+      if (skipped > 0) parts.push(`${skipped} preserved`);
+      spinner.succeed(`Project initialized — ${parts.join(", ")}`);
+    }
+
+    for (const result of fileResults) {
+      output.log(renderFileResult(result, cwd));
     }
 
     // 2b. Phase 2 — Wire validation: probe dependencies before attempting
@@ -196,18 +263,35 @@ const initCommand: Command = {
           const setupResult = await setupAiyouTeam({
             verbose: ctx.flags.verbose as boolean,
           });
-          if (setupResult.setupRan) {
-            teamSpinner.succeed(`aiyou-team ${setupResult.installed ? "installed" : "configured"} — ${setupResult.teamsConfigured.join(", ")}`);
+          if (setupResult.setupRan && setupResult.failurePhase === null) {
+            teamSpinner.succeed(
+              `aiyou-team ${setupResult.installed ? "installed" : "configured"} - ${setupResult.teamsConfigured.join(", ")}`
+            );
+          } else if (setupResult.installed && setupResult.setupRan) {
+            teamSpinner.warn("aiyou-team installed but validation flagged issues");
+            output.log(`  ${setupResult.message}`);
           } else if (setupResult.installed) {
-            teamSpinner.succeed("aiyou-team installed");
-            output.log(`  ${color.yellow("★")} Run ${color.cyan("aiyoucli setup")} to complete team configuration.`);
+            teamSpinner.warn("aiyou-team installed but setup incomplete");
+            output.log(`  ${setupResult.message}`);
+            output.log(`  ${color.yellow("*")} Run ${color.cyan("aiyou-team setup")} manually to complete.`);
           } else {
-            teamSpinner.warn("aiyou-team auto-install failed");
-            output.log(`  ${color.yellow("★")} Run ${color.cyan("aiyoucli setup")} manually to enable agent teams.`);
+            teamSpinner.fail(`aiyou-team auto-install failed at phase: ${setupResult.failurePhase ?? "unknown"}`);
+            output.log(`  ${setupResult.message}`);
+            const skipTeam = ctx.flags.skipTeam as boolean;
+            if (!skipTeam) {
+              output.log("");
+              output.warn(
+                "Without aiyou-team plugin, the 8 agents listed in AGENTS.md " +
+                  "(coding-leader, coding-executor, etc.) will NOT be available. " +
+                  "Either fix the install above, or re-run with --skip-team to opt out."
+              );
+            }
           }
         } catch (err) {
-          teamSpinner.warn("aiyou-team auto-install failed");
-          output.log(`  ${color.yellow("★")} Run ${color.cyan("aiyoucli setup")} to enable agent teams.`);
+          teamSpinner.fail("aiyou-team auto-install crashed");
+          const msg = err instanceof Error ? err.message : String(err);
+          output.log(`  ${msg}`);
+          output.log(`  ${color.yellow("*")} Run ${color.cyan("aiyoucli setup")} manually to enable agent teams.`);
         }
       } else {
         output.log(`  ${color.green("✓")} aiyou-team ${color.dim(`(via ${teamStatus.via})`)}`);
@@ -241,7 +325,9 @@ const initCommand: Command = {
     if (!ctx.flags["skip-skills"] && ctx.interactive) {
       try {
         const skillPaths = await interactiveInit(cwd);
-        created.push(...skillPaths);
+        for (const p of skillPaths) {
+          fileResults.push({ path: p, status: "created" });
+        }
       } catch {
         // Non-critical — skills are optional
       }
