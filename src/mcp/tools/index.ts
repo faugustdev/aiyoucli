@@ -27,6 +27,7 @@ import { routeTools } from "./route-tools.js";
 import { statusTools } from "./status-tools.js";
 import { statsTools } from "./stats-tools.js";
 import { embedTools } from "./embed-tools.js";
+import { graphTools } from "./graph-tools.js";
 
 export function registerAllTools(): void {
   registry.registerAll(memoryTools);
@@ -53,4 +54,5 @@ export function registerAllTools(): void {
   registry.registerAll(statusTools);
   registry.registerAll(statsTools);
   registry.registerAll(embedTools);
+  registry.registerAll(graphTools);
 }

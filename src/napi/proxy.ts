@@ -54,6 +54,7 @@ export interface ProxyEngineHandle {
   semanticRouteEnhanced(task: string): SemanticRouteResult;
   semanticEmbed(text: string): number[];
   semanticStats(): SemanticRouterStats;
+  semanticAgentProfiles(): AgentProfile[];
 }
 
 // ── AST types ──────────────────────────────────────────────────────
@@ -128,6 +129,19 @@ export interface SemanticRouterStats {
     keywords: number;
     patterns: number;
   }>;
+}
+
+/**
+ * Full agent profile as defined in the Rust semantic router.
+ * Keywords are returned sorted by weight (descending) for convenience.
+ * Single source of truth — both `q_table_seed` and any future routing
+ * layer that needs agent metadata must go through this type.
+ */
+export interface AgentProfile {
+  name: string;
+  model_tier: string;
+  keywords: Array<{ text: string; weight: number }>;
+  patterns: string[];
 }
 
 export interface ProxyResponse {

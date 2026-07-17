@@ -397,4 +397,13 @@ impl ProxyEngine {
     pub fn semantic_stats(&self) -> serde_json::Value {
         self.semantic_router.keyword.stats()
     }
+
+    /// Return the full list of agent profiles (name, model_tier, keywords, patterns).
+    ///
+    /// Used by q_table_seed to seed the Q-router with sensible initial values
+    /// without duplicating the keyword tables in TypeScript.
+    #[napi]
+    pub fn semantic_agent_profiles(&self) -> serde_json::Value {
+        self.semantic_router.keyword.agent_profiles()
+    }
 }

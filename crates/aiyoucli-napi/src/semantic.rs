@@ -339,6 +339,36 @@ impl SemanticRouter {
         })
     }
 
+    /// Return the full agent profile list as JSON.
+    ///
+    /// Exposed to TypeScript via NAPI. Used by the q_table_seed MCP tool
+    /// to seed the Q-router with sensible initial values for each profile's
+    /// top keywords. Single source of truth: changing a profile's keywords
+    /// here automatically updates the seed.
+    pub fn agent_profiles(&self) -> serde_json::Value {
+        let profiles: Vec<serde_json::Value> = self
+            .profiles
+            .iter()
+            .map(|p| {
+                // Collect keywords as {text, weight} pairs and sort by weight
+                // descending so callers can pick the top-K without re-sorting.
+                let mut kw: Vec<(&'static str, f64)> = p.keywords.to_vec();
+                kw.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                let keywords: Vec<serde_json::Value> = kw
+                    .into_iter()
+                    .map(|(text, weight)| serde_json::json!({ "text": text, "weight": weight }))
+                    .collect();
+                serde_json::json!({
+                    "name": p.name,
+                    "model_tier": p.model_tier,
+                    "keywords": keywords,
+                    "patterns": p.patterns,
+                })
+            })
+            .collect();
+        serde_json::json!(profiles)
+    }
+
     // ── Scorers ─────────────────────────────────────────────────
 
     fn score_keywords(text: &str, keywords: &[(&str, f64)]) -> f64 {

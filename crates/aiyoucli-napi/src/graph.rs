@@ -125,6 +125,7 @@ fn parse_node_kind(s: &str) -> NodeKind {
         "decision" => NodeKind::Decision,
         "file" => NodeKind::File,
         "function" => NodeKind::Function,
+        "agent" => NodeKind::Agent,
         _ => NodeKind::Concept,
     }
 }

@@ -20,6 +20,7 @@ interface NapiBindings {
   GraphHandle: GraphHandleConstructor;
   RoutingEngine: RoutingEngineConstructor;
   AnalysisEngine: AnalysisEngineConstructor;
+  ProxyEngine: ProxyEngineConstructor;
   distillMarkdown: (markdown: string) => string;
   distillFile: (path: string) => string;
   detectTechnologies: (projectDir: string) => DetectResult;
@@ -275,6 +276,14 @@ export function createAnalysisEngine(): AnalysisEngine {
   return new (getBindings().AnalysisEngine)();
 }
 
+// ── Proxy Engine (single source of truth for agent profiles) ──────
+
+interface ProxyEngineConstructor {
+  new (): {
+    semanticAgentProfiles(): AgentProfile[];
+  };
+}
+
 // ── Distiller ────────────────────────────────────────────────────
 
 /**
@@ -297,4 +306,60 @@ export function distillFile(path: string): string {
  */
 export function detectTechnologies(projectDir: string): DetectResult {
   return getBindings().detectTechnologies(projectDir);
+}
+
+// ── Proxy Engine (semantic router side-channel) ────────────────────
+//
+// The ProxyEngine NAPI binding exposes `semanticAgentProfiles` which
+// returns the full 8-agent profile list. This is the single source of
+// truth for Q-table seeding — duplicating the keyword tables in TS
+// would silently rot. Loaded lazily so callers that don't need the
+// proxy engine don't pay the load cost.
+//
+// The NAPI binary itself is loaded via `getBindings()` (same binary
+// that hosts VectorHandle, GraphHandle, etc.). The proxy engine is a
+// class inside that binary; we instantiate it lazily.
+
+let _proxyEngine: unknown = null;
+
+function loadProxyEngineIfAvailable(): unknown {
+  if (_proxyEngine !== null) return _proxyEngine;
+  try {
+    const bindings = getBindings() as unknown as {
+      ProxyEngine?: new () => unknown;
+    };
+    if (bindings && typeof bindings.ProxyEngine === "function") {
+      _proxyEngine = new bindings.ProxyEngine();
+    } else {
+      _proxyEngine = null;
+    }
+  } catch {
+    _proxyEngine = null;
+  }
+  return _proxyEngine;
+}
+
+export interface AgentProfile {
+  name: string;
+  model_tier: string;
+  keywords: Array<{ text: string; weight: number }>;
+  patterns: string[];
+}
+
+/**
+ * Return the full agent profile list from the semantic router.
+ * Returns an empty array if the NAPI binding is unavailable.
+ */
+export function getAgentProfiles(): AgentProfile[] {
+  const engine = loadProxyEngineIfAvailable() as {
+    semanticAgentProfiles?: () => AgentProfile[];
+  } | null;
+  if (!engine || typeof engine.semanticAgentProfiles !== "function") {
+    return [];
+  }
+  try {
+    return engine.semanticAgentProfiles();
+  } catch {
+    return [];
+  }
 }

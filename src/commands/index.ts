@@ -16,6 +16,14 @@ import { renderStatusline, generateStatuslineScript } from "../statusline/genera
 import { startInteractive, stopInteractive, showStatus } from "../models/manager.js";
 import { ask } from "../init/interactive.js";
 import { setupAiyouTeam, checkAiyouTeamStatus } from "../init/team-setup.js";
+import { runWireValidation } from "../init/wire-validate.js";
+import {
+  runVerification,
+  renderInitSummary,
+  renderWireReport,
+  type VerifyReport,
+} from "../init/verify.js";
+import { warmup, renderWarmupReport, type WarmupReport } from "../init/warmup.js";
 import type { Command, MCPToolResult } from "../types.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -86,17 +94,22 @@ async function selectTargetsInteractively(): Promise<ToolTarget[]> {
 
 const initCommand: Command = {
   name: "init",
-  description: "Initialize project (AGENTS.md, settings, skills)",
+  description: "Initialize project (AGENTS.md, settings, skills) with full ecosystem bootstrap",
   options: [
     { name: "force", short: "f", description: "Overwrite existing files", type: "boolean" },
     { name: "skip-skills", description: "Skip interactive skills setup", type: "boolean" },
+    { name: "skip-verify", description: "Skip Phase 4 verification probes (faster, no MCP calls)", type: "boolean" },
+    { name: "skip-index", description: "Skip Phase 3 auto-indexing (faster init)", type: "boolean" },
+    { name: "skip-team", description: "Skip Phase 3 team/swarm initialization", type: "boolean" },
+    { name: "skip-proxy", description: "Skip Phase 3 proxy health checks", type: "boolean" },
     { name: "tool", short: "t", description: "Tools to configure: claude, gemini, opencode, all (default: all)", type: "string" },
   ],
   examples: [
-    { command: "aiyoucli init", description: "Initialize with interactive tool selection" },
+    { command: "aiyoucli init", description: "Initialize with full 4-phase bootstrap (wire + write + warm + verify)" },
     { command: "aiyoucli init --tool opencode", description: "Initialize for OpenCode only" },
     { command: "aiyoucli init --tool claude,opencode", description: "Initialize for Claude Code and OpenCode" },
     { command: "aiyoucli init --tool all", description: "Initialize for all supported tools" },
+    { command: "aiyoucli init --skip-verify", description: "Skip Phase 4 verification (faster init)" },
   ],
   action: async (ctx) => {
     const cwd = ctx.cwd;
@@ -150,6 +163,28 @@ const initCommand: Command = {
       output.log(`  ${color.green("+")} ${path.replace(cwd + "/", "")}`);
     }
 
+    // 2b. Phase 2 — Wire validation: probe dependencies before attempting
+    //     any heavy work. Read-only, no installs. Fails fast on missing
+    //     binaries but does not abort the init.
+    const teamStatus = !targets || targets.includes("opencode")
+      ? checkAiyouTeamStatus()
+      : undefined;
+    const wireReport = runWireValidation({
+      cwd,
+      aiyouTeam: teamStatus
+        ? { installed: teamStatus.installed, via: teamStatus.via }
+        : undefined,
+    });
+    renderWireReport(wireReport);
+
+    if (wireReport.hasFailures) {
+      output.log("");
+      output.warn(
+        "Some required dependencies are missing. The bootstrap will continue " +
+          "but later phases may be incomplete. See suggestions above."
+      );
+    }
+
     // 3. Auto-install aiyou-team if OpenCode target and not already installed
     if (!targets || targets.includes("opencode")) {
       const teamStatus = checkAiyouTeamStatus();
@@ -179,6 +214,29 @@ const initCommand: Command = {
       }
     }
 
+    // 3b. Phase 3 — Warmup: initialize vector memory, graph, q-table, swarm, agents, proxy health
+    let warmupReport: WarmupReport | null = null;
+    const skipIndex = ctx.flags["skip-index"] as boolean;
+    const skipTeam = ctx.flags["skip-team"] as boolean;
+    const skipProxy = ctx.flags["skip-proxy"] as boolean;
+
+    // Warmup runs for opencode target or when no specific target is set
+    if (!targets || targets.includes("opencode")) {
+      try {
+        ensureTools();
+        warmupReport = await warmup({
+          cwd,
+          skipIndex,
+          skipTeam,
+          skipProxy,
+        });
+        renderWarmupReport(warmupReport);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        output.warn(`Phase 3 (warmup) crashed: ${msg}`);
+      }
+    }
+
     // 4. Interactive skills setup (if terminal is interactive)
     if (!ctx.flags["skip-skills"] && ctx.interactive) {
       try {
@@ -189,6 +247,37 @@ const initCommand: Command = {
       }
     }
 
+    // 5. Phase 4 — Verify: aggregate health signals from MCP tools.
+    //     Read-only. Always runs (unless --skip-verify), even if earlier
+    //     phases reported issues, so the user sees the full picture.
+    let verifyReport: VerifyReport | null = null;
+    if (ctx.flags.skipVerify) {
+      output.log("");
+      output.info("Phase 4 (verify) skipped via --skip-verify");
+    } else {
+      try {
+        ensureTools();
+        verifyReport = await runVerification({
+          cwd,
+          callTool: async (name, input) => {
+            const r = await callTool(name, input);
+            const text = r.content[0]?.text ?? "";
+            return { ok: !r.isError, text, isError: r.isError };
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        output.warn(`Phase 4 (verify) crashed: ${msg}`);
+      }
+
+      if (verifyReport) {
+        renderInitSummary(wireReport, verifyReport);
+      }
+    }
+
+    // Exit 0 even on degraded — by project policy. The user gets the full
+    // report and decides what to do. Only hard failures in Phase 1
+    // (AGENTS.md / settings) exit non-zero above.
     output.log("");
     return { success: true };
   },

@@ -37,4 +37,8 @@ firebase-debug.log
 prueba/
 .agents
 .claude
-__tests__
+# Ignore test scratch files but keep the actual test sources tracked
+__tests__/*
+!__tests__/**/*.test.ts
+!__tests__/**/*.test.js
+!__tests__/.gitkeep

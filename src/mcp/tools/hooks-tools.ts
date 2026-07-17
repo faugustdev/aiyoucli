@@ -9,7 +9,12 @@ import { existsSync } from "node:fs";
 import { execSync, exec, spawn } from "node:child_process";
 import net from "node:net";
 import type { MCPTool, MCPToolResult } from "../../types.js";
-import { createRoutingEngine, type RoutingEngine } from "../../napi/index.js";
+import {
+  createRoutingEngine,
+  getAgentProfiles,
+  type RoutingEngine,
+  type AgentProfile,
+} from "../../napi/index.js";
 import { loadConfig } from "../../config.js";
 import { isPortInUse, stopAll } from "../../models/launcher.js";
 
@@ -44,8 +49,13 @@ async function waitForPortsReady(ports: number[], timeoutMs = 30000): Promise<bo
   return false;
 }
 
-const Q_TABLE_DIR = join(process.cwd(), ".aiyoucli");
-const Q_TABLE_PATH = join(Q_TABLE_DIR, "q-table.json");
+function getQTableDir(): string {
+  return join(process.cwd(), ".aiyoucli");
+}
+
+function getQTablePath(): string {
+  return join(getQTableDir(), "q-table.json");
+}
 
 let router: RoutingEngine | null = null;
 
@@ -53,9 +63,10 @@ async function getRouter(): Promise<RoutingEngine> {
   if (!router) {
     router = createRoutingEngine();
     // Load persisted Q-table if it exists
-    if (existsSync(Q_TABLE_PATH)) {
+    const qTablePath = getQTablePath();
+    if (existsSync(qTablePath)) {
       try {
-        const data = await readFile(Q_TABLE_PATH, "utf-8");
+        const data = await readFile(qTablePath, "utf-8");
         router.importQTable(data);
       } catch {
         // Corrupted file — start fresh
@@ -68,9 +79,11 @@ async function getRouter(): Promise<RoutingEngine> {
 async function persistQTable(): Promise<void> {
   if (!router) return;
   try {
-    await mkdir(Q_TABLE_DIR, { recursive: true });
+    const qTableDir = getQTableDir();
+    const qTablePath = getQTablePath();
+    await mkdir(qTableDir, { recursive: true });
     const data = router.exportQTable();
-    await writeFile(Q_TABLE_PATH, data);
+    await writeFile(qTablePath, data);
   } catch {
     // Non-critical — best effort persistence
   }
@@ -193,6 +206,88 @@ export const hooksTools: MCPTool[] = [
       }
 
       return text(`Recorded ${(input.success as boolean) ? "success" : "failure"} for ${input.agent} (Q-table saved)`);
+    },
+  },
+  {
+    name: "q_table_seed",
+    description:
+      "Seed the Q-table with sensible initial values for the 8 agent profiles. " +
+      "Idempotent: existing Q-table entries are preserved, only missing entries are added. " +
+      "Returns the number of entries seeded.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topK: {
+          type: "number",
+          description: "Number of top keywords per profile to seed (default 3, max 10)",
+        },
+        reward: {
+          type: "number",
+          description: "Initial Q-value reward for the matching agent (default 0.5, range 0..1)",
+        },
+        force: {
+          type: "boolean",
+          description: "Overwrite the existing q-table.json if present (default false)",
+        },
+      },
+    },
+    handler: async (input) => {
+      const topK = Math.min(Math.max((input.topK as number) ?? 3, 1), 10);
+      const reward = Math.min(Math.max((input.reward as number) ?? 0.5, 0), 1);
+      const force = (input.force as boolean) ?? false;
+
+      const qTablePath = getQTablePath();
+      const qTableDir = getQTableDir();
+
+      // Skip if Q-table already exists and force is false.
+      if (!force && existsSync(qTablePath)) {
+        return text(`Q-table already exists at ${qTablePath}. Pass force=true to overwrite.`);
+      }
+
+      const profiles = getAgentProfiles();
+      if (profiles.length === 0) {
+        return text(
+          "No agent profiles available — NAPI binding missing or agent_profiles() returned empty. " +
+            "Run `npm run build:rs` to ensure the native binary exposes semantic_agent_profiles."
+        );
+      }
+
+      // Create a fresh routing engine. We DO NOT load the existing Q-table
+      // because the whole point of seeding is to start from a known state.
+      const r = createRoutingEngine();
+      let seeded = 0;
+      const seedLog: Array<{ keyword: string; agent: string; reward: number }> = [];
+
+      for (const profile of profiles) {
+        for (const kw of profile.keywords.slice(0, topK)) {
+          const keyword = kw.text;
+          // route() initializes the Q-table entry for this state hash.
+          r.route(keyword);
+          // recordReward() applies a direct Q-update favoring the chosen agent.
+          r.recordReward(keyword, profile.name, reward);
+          seedLog.push({ keyword, agent: profile.name, reward });
+          seeded++;
+        }
+      }
+
+      // Persist the seeded Q-table.
+      const qJson = r.exportQTable();
+      try {
+        await mkdir(qTableDir, { recursive: true });
+        await writeFile(qTablePath, qJson, "utf-8");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return text(`Failed to write Q-table: ${msg}`);
+      }
+
+      return json({
+        seeded_entries: seeded,
+        profiles_used: profiles.length,
+        top_k: topK,
+        reward,
+        q_table_path: qTablePath,
+        sample: seedLog.slice(0, 5),
+      });
     },
   },
 ];
