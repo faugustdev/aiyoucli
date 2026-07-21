@@ -5,6 +5,8 @@
  * `callTool`, and formats the result using `output`/`color`.
  */
 
+import { spawnSync } from "node:child_process";
+
 import { callTool, registry } from "../mcp/client.js";
 import { output, color } from "../output.js";
 import { registerAllTools } from "../mcp/tools/index.js";
@@ -416,6 +418,68 @@ const setupCommand: Command = {
 
     return { success: result.setupRan };
   },
+};
+
+// ── 1b. team register / install / uninstall / doctor ─────────────────
+
+const teamRegisterCommand: Command = {
+  name: "register",
+  description: "Register the aiyou-team plugin in the OpenCode config (idempotent)",
+  options: [
+    { name: "dry-run", description: "Show what would be done without making changes", type: "boolean" },
+    { name: "verbose", short: "v", description: "Show detailed output", type: "boolean" },
+  ],
+  examples: [
+    { command: "aiyoucli team register", description: "Ensure the aiyou-team plugin is registered globally" },
+    { command: "aiyoucli team register --verbose", description: "Verbose registration" },
+  ],
+  action: async (ctx) => {
+    const result = await setupAiyouTeam({
+      dryRun: ctx.flags["dry-run"] as boolean,
+      verbose: ctx.flags.verbose as boolean,
+    });
+
+    if (result.failurePhase !== null) {
+      output.log(`${color.red("✕")} ${result.message}`);
+      return { success: false };
+    }
+
+    output.log(`${color.green("✓")} ${result.message}`);
+    if (result.teamsConfigured.length > 0) {
+      output.log(`  Teams: ${result.teamsConfigured.join(", ")}`);
+    }
+    return { success: true };
+  },
+};
+
+const teamDoctorCommand: Command = {
+  name: "doctor",
+  description: "Run aiyou-team doctor for diagnostics",
+  options: [
+    { name: "config-path", description: "Path to the OpenCode config file", type: "string" },
+  ],
+  action: async (ctx) => {
+    const args = ["aiyou-team", "doctor"];
+    if (ctx.flags["config-path"]) {
+      args.push("--config-path", String(ctx.flags["config-path"]));
+    }
+    const result = spawnSync("npx", args, {
+      shell: process.platform === "win32",
+      stdio: "inherit",
+      timeout: 60_000,
+    });
+    if (result.error) {
+      output.log(`${color.red("✕")} ${result.error.message}`);
+      return { success: false };
+    }
+    return { success: result.status === 0 };
+  },
+};
+
+const teamCommand: Command = {
+  name: "team",
+  description: "aiyou-team plugin management",
+  subcommands: [teamRegisterCommand, teamDoctorCommand],
 };
 
 // ── 2. agent ───────────────────────────────────────────────────────
@@ -1492,6 +1556,7 @@ const skillsCommand: Command = {
 export const commands: Command[] = [
   initCommand,
   setupCommand,
+  teamCommand,
   agentCommand,
   swarmCommand,
   memoryCommand,

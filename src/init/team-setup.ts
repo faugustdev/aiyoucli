@@ -246,6 +246,58 @@ function runAiyouTeamSetup(options: TeamSetupOptions): SetupResult {
   };
 }
 
+/**
+ * Run `aiyou-team install` — this is the lowest-level command that writes
+ * the plugin entry to the OpenCode config. It is idempotent and safe to
+ * re-run even when the plugin is already installed. We use it as a
+ * recovery step for the common case where a user installed @aiyou-dev/cli
+ * globally but never ran `aiyoucli init`, leaving the OpenCode plugin
+ * entry missing from `~/.config/opencode/opencode.json[c]`.
+ */
+function runAiyouTeamInstall(options: TeamSetupOptions): SetupResult {
+  const args = ["aiyou-team", "install", "--source", "registry", "--yes"];
+
+  if (options.verbose) {
+    args.push("--verbose");
+  }
+
+  if (options.dryRun) {
+    args.push("--dry-run");
+  }
+
+  const candidates: Array<{ command: string; args: string[] }> = [
+    { command: "npx", args },
+    { command: "aiyou-team", args: ["install", "--source", "registry", "--yes", ...args.slice(2)] },
+  ];
+
+  let lastOutput = "";
+  let lastStderr = "";
+  let lastStatus: number | null = 1;
+
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate.command, candidate.args, {
+      shell: process.platform === "win32",
+      stdio: "pipe",
+      timeout: 120_000,
+      encoding: "utf8",
+    });
+    const stdout = (typeof result.stdout === "string" ? result.stdout : "").trim();
+    const stderr = (typeof result.stderr === "string" ? result.stderr : "").trim();
+    lastOutput = stdout || stderr;
+    lastStderr = stderr;
+    lastStatus = result.status;
+    if (result.status === 0) {
+      return { success: true, output: lastOutput, stderr: lastStderr };
+    }
+  }
+
+  return {
+    success: lastStatus === 0,
+    output: lastOutput || "(no output)",
+    stderr: lastStderr,
+  };
+}
+
 function parseTeamsFromSetupOutput(output: string): string[] {
   const teams: string[] = [];
   const teamPatterns = [/coding-team/, /general-team/, /wukong-team/];
@@ -316,9 +368,31 @@ export async function setupAiyouTeam(
   const detection = detectAiyouTeamCli();
 
   if (detection.found) {
-    // Already installed — run setup directly
+    // Already installed — make sure the OpenCode plugin entry is registered,
+    // even if the user never ran `aiyou-team setup` after the npm install.
+    // `aiyou-team install` is idempotent: it only writes when the entry is
+    // missing or stale, and works even when the package is already on disk.
     if (options.verbose) {
       console.log(`  aiyou-team already installed (via ${detection.via}, v${detection.version ?? "?"})`);
+    }
+
+    const install = runAiyouTeamInstall(options);
+    if (!install.success) {
+      return {
+        installed: true,
+        installedGlobally: true,
+        setupRan: false,
+        teamsConfigured: [],
+        failurePhase: "setup",
+        message: [
+          `aiyou-team v${detection.version ?? "unknown"} found but registering the OpenCode plugin entry failed.`,
+          "",
+          "Last output:",
+          install.output || install.stderr || "(no output)",
+          "",
+          "Run `aiyou-team install --source registry --yes` manually to register the plugin.",
+        ].join("\n"),
+      };
     }
 
     const setup = runAiyouTeamSetup(options);
