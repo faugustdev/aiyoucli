@@ -1,6 +1,6 @@
 # Getting Started
 
-[Home](../README.md) | **Getting Started** | [CLI Reference](cli-reference.md) | [MCP Tools](mcp-tools.md) | [Architecture](architecture.md) | [Configuration](configuration.md) | [Local Models](local-models.md)
+[Home](../README.md) | **Getting Started** | [CLI Reference](cli-reference.md) | [MCP Tools](mcp-tools.md) | [Architecture](architecture.md) | [Configuration](configuration.md)
 
 ---
 
@@ -63,7 +63,7 @@ Reports the status of Node.js, NAPI bindings, and git.
 aiyoucli status
 ```
 
-Shows an overview of tools, memory, agents, and configuration state.
+Shows an overview of tools, memory, and configuration state.
 
 ### Initialize and use vector memory
 
@@ -81,18 +81,14 @@ aiyoucli memory search --vector "0.9,0.1,0" --k 3
 aiyoucli memory stats
 ```
 
-### Spawn and manage agents
+### Set up the agent team
 
 ```bash
-# Spawn an agent with a specific model tier
-aiyoucli agent spawn --name worker --model sonnet
-
-# List active agents
-aiyoucli agent list
-
-# Record task outcomes for learning
-aiyoucli agent record --id <agent-id> --success
+aiyoucli setup
+aiyoucli team doctor
 ```
+
+Agent orchestration is provided by the `@aiyou-dev/team` OpenCode plugin rather than duplicated inside aiyoucli.
 
 ### Analyze code
 
@@ -107,7 +103,7 @@ aiyoucli analyze diff
 aiyoucli analyze commit HEAD
 ```
 
-### Route tasks to agents
+### Route tasks
 
 ```bash
 # Get a routing recommendation for a task
@@ -121,19 +117,6 @@ aiyoucli mcp start
 ```
 
 Starts the MCP server over stdio, exposing all tools to compatible clients.
-
-### Multi-agent swarms
-
-```bash
-# Initialize a swarm with a topology
-aiyoucli swarm init --topology mesh
-
-# Check swarm status
-aiyoucli swarm status
-
-# Stop the swarm
-aiyoucli swarm stop
-```
 
 ### Security scanning
 
@@ -166,7 +149,7 @@ To use aiyoucli as an MCP server inside Claude Code, add the following to your `
 }
 ```
 
-Once configured, Claude Code can call any aiyoucli tool directly -- vector search, agent management, code analysis, task routing, and more. See [MCP Tools Reference](mcp-tools.md) for the full catalog.
+Once configured, Claude Code can call aiyoucli tools directly for vector search, code analysis, routing, and related capabilities. Agent-team support for Claude Code is still deferred; `@aiyou-dev/team` currently integrates with OpenCode.
 
 ## Project Structure
 
@@ -177,10 +160,6 @@ your-project/
   .aiyoucli/
     config.json          # Project configuration
     vectors.redb         # Persistent vector database
-    agents/store.json    # Agent registry
-    tasks/store.json     # Task registry
-    swarm/state.json     # Swarm state
-    sessions/            # Session persistence
     skills/              # TOON-distilled skills
     metrics/             # Saved metrics snapshots
     q-table.json         # Routing Q-table (learned preferences)

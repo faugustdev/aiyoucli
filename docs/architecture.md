@@ -1,6 +1,6 @@
 # Architecture
 
-[Home](../README.md) | [Getting Started](getting-started.md) | [CLI Reference](cli-reference.md) | [MCP Tools](mcp-tools.md) | **Architecture** | [Configuration](configuration.md) | [Local Models](local-models.md)
+[Home](../README.md) | [Getting Started](getting-started.md) | [CLI Reference](cli-reference.md) | [MCP Tools](mcp-tools.md) | **Architecture** | [Configuration](configuration.md)
 
 ---
 
@@ -60,28 +60,29 @@ The server supports:
 
 ### Tool Modules
 
-Tools are organized into 18 modules, each exporting an array of `MCPTool` objects:
+Tools are organized into focused modules, each exporting an array of `MCPTool` objects:
 
-| Module | File | Tools |
-|---|---|---|
-| System | `system-tools.ts` | `system_status`, `system_doctor` |
-| Config | `config-tools.ts` | `config_get`, `config_set` |
-| Agents | `agent-tools.ts` | `agent_spawn`, `agent_list`, `agent_status`, `agent_stop`, `agent_record`, `agent_metrics` |
-| Memory | `memory-tools.ts` | `memory_init`, `memory_store`, `memory_search`, `memory_count`, `memory_stats`, `memory_delete` |
-| Tasks | `task-tools.ts` | `task_create`, `task_list`, `task_status`, `task_complete` |
-| Sessions | `session-tools.ts` | `session_start`, `session_end`, `session_list` |
-| Hooks | `hooks-tools.ts` | `hooks_pre_task`, `hooks_post_task`, `hooks_route`, `hooks_model_route`, `hooks_stats` |
-| Swarm | `swarm-tools.ts` | `swarm_init`, `swarm_status`, `swarm_stop` |
-| Coordination | `coordination-tools.ts` | `coordination_status` |
-| Neural | `neural-tools.ts` | `neural_observe`, `neural_transform`, `neural_learn`, `neural_stats` |
-| Analysis | `analyze-tools.ts` | `analyze_diff`, `analyze_commit`, `analyze_complexity` |
-| Distiller | `distiller-tools.ts` | `distill_markdown`, `distill_file` |
-| Skills | `skills-tools.ts` | `skills_sync`, `skills_list`, `skills_detect` |
-| Security | `security-tools.ts` | `security_scan` |
-| Performance | `performance-tools.ts` | `perf_benchmark` |
-| Metrics | `metrics-tools.ts` | `metrics_snapshot`, `metrics_record_tokens`, `metrics_cost`, `metrics_memory`, `metrics_latency`, `metrics_tools_summary`, `metrics_save`, `metrics_reset` |
-| Git Context | `gcc-tools.ts` | `git_context` |
-| Statusline | `statusline-tools.ts` | `statusline` |
+| Module | File |
+|---|---|
+| System | `system-tools.ts` |
+| Config | `config-tools.ts` |
+| Memory | `memory-tools.ts` |
+| Hooks | `hooks-tools.ts` |
+| Neural | `neural-tools.ts` |
+| Analysis | `analyze-tools.ts` |
+| Distiller | `distiller-tools.ts` |
+| Skills | `skills-tools.ts` |
+| Security | `security-tools.ts` |
+| Performance | `performance-tools.ts` |
+| Git Context | `gcc-tools.ts` |
+| Proxy | `proxy-tools.ts` |
+| AST | `ast-tools.ts` |
+| Graph | `graph-tools.ts` |
+| Discovery | `discovery-tools.ts` |
+| Routing | `route-tools.ts` |
+| Status | `status-tools.ts` |
+| Statistics | `stats-tools.ts` |
+| Embeddings | `embed-tools.ts` |
 
 ## Rust NAPI Layer
 
@@ -192,14 +193,6 @@ All runtime state is stored under `.aiyoucli/` in the project root:
   vectors.redb             # Persistent vector database (redb)
   memory-config.json       # Vector DB settings
   q-table.json             # Routing Q-table (persisted between sessions)
-  agents/
-    store.json             # Agent registry
-  tasks/
-    store.json             # Task registry
-  swarm/
-    state.json             # Swarm state
-  sessions/
-    <session-id>.json      # Individual session files
   skills/
     <name>.dsi.toon        # TOON-distilled skill files
   metrics/

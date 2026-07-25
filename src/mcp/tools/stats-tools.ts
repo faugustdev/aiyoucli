@@ -44,28 +44,20 @@ async function getRouter() {
 function getProxyEngine(): any {
   try {
     const mod = require("../../napi/proxy.js");
-    return mod.getProxyEngine?.() ?? null;
+    return mod.createProxyEngine();
   } catch { return null; }
-}
-
-function loadAgents(): any[] {
-  const { existsSync, readFileSync } = require("node:fs");
-  const { join } = require("node:path");
-  const f = join(process.cwd(), ".aiyoucli", "agents", "store.json");
-  if (!existsSync(f)) return [];
-  try { return JSON.parse(readFileSync(f, "utf-8")); } catch { return []; }
 }
 
 export const statsTools: MCPTool[] = [
   {
     name: "stats",
-    description: "Get statistics for a subsystem. scope: memory, agents, routing, neural, semantic, cache, full",
+    description: "Get statistics for a subsystem. scope: memory, routing, neural, semantic, cache, full",
     inputSchema: {
       type: "object",
       properties: {
         scope: {
           type: "string",
-          enum: ["memory", "agents", "routing", "neural", "semantic", "cache", "full"],
+          enum: ["memory", "routing", "neural", "semantic", "cache", "full"],
           description: "Which subsystem stats to retrieve (default: full)",
         },
         model_tier: { type: "string", description: "Model tier for full stats (opus/sonnet/haiku)" },
@@ -76,18 +68,6 @@ export const statsTools: MCPTool[] = [
       const { metrics } = await import("../../metrics/collector.js");
       switch (scope) {
         case "memory": return json(getMemoryDB().stats());
-        case "agents": {
-          const agents = loadAgents().filter((a: any) => a.status !== "stopped");
-          const summary = { totalAgents: agents.length, totalTasks: 0, totalSucceeded: 0, totalFailed: 0, byType: {} as any };
-          for (const a of agents) {
-            summary.totalTasks += a.metrics?.tasksCompleted ?? 0;
-            summary.totalSucceeded += a.metrics?.tasksSucceeded ?? 0;
-            summary.totalFailed += a.metrics?.tasksFailed ?? 0;
-            const e = (summary.byType[a.type] ??= { count: 0, tasks: 0 });
-            e.count++; e.tasks += a.metrics?.tasksCompleted ?? 0;
-          }
-          return json(summary);
-        }
         case "routing": return json((await getRouter()).stats());
         case "neural": return json(getSona().stats());
         case "semantic": {

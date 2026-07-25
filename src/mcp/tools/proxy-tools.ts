@@ -24,7 +24,7 @@ function getProxyEngine() {
 function createProxyEngine() {
   // Lazy-load NAPI proxy bindings
   const mod = require("../../napi/proxy.js");
-  return mod.getProxyEngine?.() ?? null;
+  return mod.createProxyEngine();
 }
 
 export const proxyTools: MCPTool[] = [

@@ -5,11 +5,8 @@
  * - Vector memory (memory_init)
  * - Knowledge graph (graph_bootstrap)
  * - Q-table seeding (q_table_seed)
- * - Swarm coordination (swarm_init)
- * - Baseline agents (agent_spawn × 3)
  * - Neural learning baseline (neural_observe)
  * - Proxy health checks (proxy_health, proxy_shield_check)
- * - Deep research priming (rd_strategies)
  * - Skills detection (skills_detect)
  * - Project auto-indexing (autoIndex)
  * 
@@ -91,24 +88,32 @@ async function runStep(
 export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
   const startTime = Date.now();
   const steps: WarmupStep[] = [];
-  const { cwd, skipIndex, skipTeam, skipProxy, onProgress } = options;
+  const { cwd, skipIndex, skipProxy, onProgress } = options;
   
   // 1. Vector memory initialization
   steps.push(
     await runStep(
       "memory_init",
       async () => {
+        // 8 dimensions, not 384: auto_index (step 10 below) embeds chunks
+        // with the "keyword" embedder (indexer-embed.ts), which is
+        // 8-dimensional and has no external dependencies. The 384-dim
+        // "onnx" embedder requires a separately-started local ONNX server
+        // (see AGENTS.md) that `init` does not launch, so defaulting this
+        // collection to 384 made every auto-indexed chunk fail memory-tools'
+        // dimension check. Re-run `memory init --dimensions 384` manually
+        // if you want to store real ONNX embeddings here instead.
         const result = await callTool("memory_init", {
           path: ".aiyoucli/vectors.redb",
-          dimensions: 384,
+          dimensions: 8,
           enable_hnsw: true,
         });
-        
+
         if (result.isError) {
           return { ok: false, detail: result.content[0]?.text ?? "Unknown error" };
         }
-        
-        return { ok: true, detail: "HNSW 384d initialized" };
+
+        return { ok: true, detail: "HNSW 8d initialized (keyword embeddings)" };
       },
       onProgress
     )
@@ -166,71 +171,6 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
       onProgress
     )
   );
-  
-  // 4. Swarm initialization (unless skipped)
-  if (!skipTeam) {
-    steps.push(
-      await runStep(
-        "swarm_init",
-        async () => {
-          const result = await callTool("swarm_init", {
-            topology: "hierarchical",
-            maxAgents: 5,
-            strategy: "specialized",
-          });
-          
-          if (result.isError) {
-            return { ok: false, detail: result.content[0]?.text ?? "Unknown error" };
-          }
-          
-          return { ok: true, detail: "Hierarchical swarm initialized" };
-        },
-        onProgress
-      )
-    );
-    
-    // 5. Spawn baseline agents
-    const agentTypes = ["coder", "researcher", "reviewer"];
-    for (const type of agentTypes) {
-      steps.push(
-        await runStep(
-          `agent_spawn:${type}`,
-          async () => {
-            const result = await callTool("agent_spawn", {
-              type,
-              name: `warmup-${type}`,
-            });
-            
-            if (result.isError) {
-              return { ok: false, detail: result.content[0]?.text ?? "Unknown error" };
-            }
-            
-            const data = JSON.parse(result.content[0]?.text ?? "{}");
-            return {
-              ok: true,
-              detail: `Spawned ${type} agent (${data.id})`,
-            };
-          },
-          onProgress
-        )
-      );
-    }
-  } else {
-    steps.push({
-      name: "swarm_init",
-      status: "skipped",
-      detail: "Skipped via --skip-team",
-      duration_ms: 0,
-    });
-    for (const type of ["coder", "researcher", "reviewer"]) {
-      steps.push({
-        name: `agent_spawn:${type}`,
-        status: "skipped",
-        detail: "Skipped via --skip-team",
-        duration_ms: 0,
-      });
-    }
-  }
   
   // 6. Neural baseline observation
   steps.push(
@@ -317,38 +257,6 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
       duration_ms: 0,
     });
   }
-  
-  // 8. Deep research priming
-  steps.push(
-    await runStep(
-      "rd_strategies",
-      async () => {
-        const result = await callTool("rd_strategies", {});
-        
-        if (result.isError) {
-          return { ok: false, detail: result.content[0]?.text ?? "Unknown error" };
-        }
-        
-        const text = result.content[0]?.text ?? "";
-        // rd_strategies might return text or JSON array
-        try {
-          const data = JSON.parse(text);
-          if (Array.isArray(data)) {
-            return { ok: true, detail: `${data.length} strategies available` };
-          }
-          return { ok: true, detail: "Strategies listed" };
-        } catch {
-          // Text response - count strategy names if possible
-          const count = (text.match(/^\s*[-*]\s+/gm) || []).length;
-          return {
-            ok: true,
-            detail: count > 0 ? `${count} strategies available` : "Strategies listed",
-          };
-        }
-      },
-      onProgress
-    )
-  );
   
   // 9. Skills detection
   steps.push(

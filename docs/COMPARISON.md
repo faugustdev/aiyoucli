@@ -1,5 +1,7 @@
 # aiyoucli vs @aiyou-dev/cli — Comparativa
 
+> **Snapshot histórico.** Esta tabla quedó fijada en la migración inicial. La superficie actual de aiyoucli retiró los comandos `agent`, `swarm`, `task`, `session`, `models`, `rd` y los módulos de tools homónimos — esa eliminación posterior no está reflejada en las filas siguientes. La fuente de verdad actual es `aiyoucli mcp tools` y `plans/aiyoucli-deferred-work.md`.
+
 ## Tamaño del proyecto
 
 | Métrica | Viejo (v3/@aiyou-dev/cli) | Nuevo (aiyoucli) |

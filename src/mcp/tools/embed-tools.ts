@@ -10,7 +10,7 @@ function text(t: string): MCPToolResult {
 function getProxyEngine(): any {
   try {
     const mod = require("../../napi/proxy.js");
-    return mod.getProxyEngine?.() ?? null;
+    return mod.createProxyEngine();
   } catch { return null; }
 }
 

@@ -1,6 +1,6 @@
 # Configuration
 
-[Home](../README.md) | [Getting Started](getting-started.md) | [CLI Reference](cli-reference.md) | [MCP Tools](mcp-tools.md) | [Architecture](architecture.md) | **Configuration** | [Local Models](local-models.md)
+[Home](../README.md) | [Getting Started](getting-started.md) | [CLI Reference](cli-reference.md) | [MCP Tools](mcp-tools.md) | [Architecture](architecture.md) | **Configuration**
 
 ---
 
@@ -24,14 +24,9 @@ The first file found is used. If no file exists, built-in defaults apply. Enviro
   "projectRoot": ".",
   "memory": {
     "backend": "aiyouvector",
-    "storagePath": ".aiyoucli/memory",
-    "dimensions": 384,
+    "storagePath": ".aiyoucli/vectors.redb",
+    "dimensions": 8,
     "enableHNSW": true
-  },
-  "swarm": {
-    "topology": "hierarchical",
-    "maxAgents": 8,
-    "strategy": "specialized"
   },
   "mcp": {
     "transport": "stdio",
@@ -52,17 +47,9 @@ The first file found is used. If no file exists, built-in defaults apply. Enviro
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `memory.backend` | `"aiyouvector"` \| `"memory"` | `"aiyouvector"` | Storage backend. `aiyouvector` uses persistent redb storage. `memory` uses in-memory only. |
-| `memory.storagePath` | string | `".aiyoucli/memory"` | Path for persistent vector storage, relative to project root. |
-| `memory.dimensions` | number | `384` | Number of dimensions for stored vectors. All vectors must match this dimensionality. |
+| `memory.storagePath` | string | `".aiyoucli/vectors.redb"` | Path for persistent vector storage, relative to project root. |
+| `memory.dimensions` | number | `8` | Number of dimensions for stored vectors. Defaults to 8 because the auto-indexer uses keyword embeddings. ONNX 384-dim embeddings are available separately via the embed server. |
 | `memory.enableHNSW` | boolean | `true` | Enable HNSW (Hierarchical Navigable Small World) index for fast approximate nearest neighbor search. |
-
-### Swarm Configuration
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `swarm.topology` | `"hierarchical"` \| `"mesh"` \| `"ring"` \| `"star"` \| `"hybrid"` | `"hierarchical"` | Multi-agent swarm topology. Determines how agents communicate and coordinate. |
-| `swarm.maxAgents` | number | `8` | Maximum number of agents allowed in a swarm. |
-| `swarm.strategy` | `"specialized"` \| `"balanced"` \| `"adaptive"` | `"specialized"` | Agent allocation strategy. `specialized` assigns best-fit agents. `balanced` distributes evenly. `adaptive` adjusts based on load. |
 
 ### MCP Configuration
 
@@ -90,8 +77,6 @@ Environment variables take precedence over all file-based configuration. They ar
 | `AIYOUCLI_MEMORY_BACKEND` | `memory.backend` | string | Storage backend: `aiyouvector` or `memory` |
 | `AIYOUCLI_MEMORY_PATH` | `memory.storagePath` | string | Path for persistent vector storage |
 | `AIYOUCLI_MEMORY_DIMENSIONS` | `memory.dimensions` | number | Vector dimensions (must be a positive integer) |
-| `AIYOUCLI_SWARM_TOPOLOGY` | `swarm.topology` | string | Swarm topology: `hierarchical`, `mesh`, `ring`, `star`, `hybrid` |
-| `AIYOUCLI_SWARM_MAX_AGENTS` | `swarm.maxAgents` | number | Maximum agents in swarm (must be a positive integer) |
 | `AIYOUCLI_MCP_PORT` | `mcp.port` | number | MCP HTTP transport port (must be a positive integer) |
 | `AIYOUCLI_VERBOSITY` | `cli.verbosity` | string | Verbosity: `quiet`, `normal`, `verbose`, `debug` |
 | `NO_COLOR` | `cli.color` | presence | When set (any value), disables colored output |
@@ -102,11 +87,8 @@ Environment variables take precedence over all file-based configuration. They ar
 # Use in-memory vector storage
 AIYOUCLI_MEMORY_BACKEND=memory aiyoucli memory init
 
-# Increase vector dimensions
-AIYOUCLI_MEMORY_DIMENSIONS=512 aiyoucli memory init
-
-# Use mesh topology for swarm
-AIYOUCLI_SWARM_TOPOLOGY=mesh aiyoucli swarm init
+# Override vector dimensions for ONNX workflows
+AIYOUCLI_MEMORY_DIMENSIONS=384 aiyoucli memory init
 
 # Run with debug verbosity
 AIYOUCLI_VERBOSITY=debug aiyoucli doctor
@@ -139,8 +121,7 @@ aiyoucli config get
 aiyoucli config get memory.dimensions
 
 # Set a value (persists to .aiyoucli/config.json)
-aiyoucli config set memory.dimensions 512
-aiyoucli config set swarm.topology mesh
+aiyoucli config set memory.dimensions 384
 aiyoucli config set cli.verbosity debug
 ```
 
@@ -148,11 +129,15 @@ Changes made via `config set` are written to `.aiyoucli/config.json`. Environmen
 
 ## Per-Project vs Global Configuration
 
-aiyoucli uses **per-project** configuration exclusively. Each project has its own `.aiyoucli/` directory with independent settings, vector storage, agent state, and routing tables.
+aiyoucli uses **per-project** configuration exclusively. Each project has its own `.aiyoucli/` directory with independent settings, vector storage, and the Q-table.
 
 There is no global configuration file. To share settings across projects, use environment variables or a shell alias:
 
 ```bash
 # In .zshrc or .bashrc
-alias aiyoucli='AIYOUCLI_MEMORY_DIMENSIONS=512 AIYOUCLI_SWARM_TOPOLOGY=mesh aiyoucli'
+alias aiyoucli='AIYOUCLI_MEMORY_DIMENSIONS=384 aiyoucli'
 ```
+
+## Agent Team
+
+Agent orchestration is owned by `@aiyou-dev/team` (OpenCode plugin). There is no `swarm`, `agents`, or `tasks` block in aiyoucli's config — those settings live in `aiyou-team`'s runtime configuration. See `plans/aiyoucli-deferred-work.md` for the Claude Code plan.

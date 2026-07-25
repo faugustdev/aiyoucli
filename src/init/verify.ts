@@ -148,45 +148,6 @@ async function probeCapabilities(c: ToolCaller): Promise<VerifyRow[]> {
   return rows;
 }
 
-async function probeCoordination(c: ToolCaller): Promise<VerifyRow> {
-  const r = okIfText(await c("status", { scope: "coordination" }));
-  if (!r.ok) {
-    return {
-      name: "Coordination",
-      status: "degraded",
-      detail: r.text || "coordination status unavailable",
-    };
-  }
-  const data = r.parsed as {
-    swarm?: { active?: boolean; topology?: string; agentCount?: number };
-    agents?: { total?: number; active?: number };
-    tasks?: { total?: number; running?: number; done?: number };
-  } | undefined;
-  const swarmActive = data?.swarm?.active === true;
-  const agentCount = data?.agents?.active ?? data?.swarm?.agentCount ?? 0;
-  const taskCount = data?.tasks?.total ?? 0;
-  if (swarmActive && agentCount > 0) {
-    return {
-      name: "Coordination",
-      status: "ok",
-      detail: `swarm ${data?.swarm?.topology ?? "?"} · ${agentCount} agents · ${taskCount} tasks`,
-    };
-  }
-  if (swarmActive) {
-    return {
-      name: "Coordination",
-      status: "ok",
-      detail: `swarm ${data?.swarm?.topology ?? "?"} active · 0 agents`,
-    };
-  }
-  return {
-    name: "Coordination",
-    status: "degraded",
-    detail: "swarm not initialized",
-    suggestion: "Phase 3 (warmup) will initialize it on next `aiyoucli init`.",
-  };
-}
-
 async function probeMemory(c: ToolCaller): Promise<VerifyRow> {
   const r = okIfText(await c("memory_count", {}));
   if (!r.ok) {
@@ -203,7 +164,7 @@ async function probeMemory(c: ToolCaller): Promise<VerifyRow> {
   return {
     name: "Memory",
     status: count > 0 ? "ok" : "degraded",
-    detail: count > 0 ? `HNSW 384d · ${count} vectors` : "empty (Phase 3 will init)",
+    detail: count > 0 ? `HNSW 8d · ${count} vectors` : "empty (Phase 3 will init)",
     suggestion: count > 0 ? undefined : "Run `aiyoucli init` to initialize.",
   };
 }
@@ -221,7 +182,6 @@ export async function runVerification(opts: VerifyOptions): Promise<VerifyReport
   const results = await Promise.allSettled([
     probeSystemDoctor(opts.callTool),
     probeCapabilities(opts.callTool),
-    probeCoordination(opts.callTool),
     probeMemory(opts.callTool),
   ]);
 

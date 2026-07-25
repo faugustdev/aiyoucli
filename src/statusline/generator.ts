@@ -45,9 +45,6 @@ interface Data {
   model: string;
   modelCtx: string;
   duration: string;
-  agents: number;
-  swarm: { on: boolean; topology: string; max: number };
-  tasks: { p: number; r: number; c: number };
   vectors: number;
   tests: number;
   tools: number;
@@ -125,19 +122,7 @@ function collect(cwd: string): Data {
     }
   } catch {}
 
-  // aiyoucli state — only show what actually exists
   const base = join(cwd, ".aiyoucli");
-  const agentsData = readJson(join(base, "agents", "store.json")) as Array<{ status: string }> | null;
-  const swarmData = readJson(join(base, "swarm", "state.json")) as { status?: string; topology?: string; maxAgents?: number } | null;
-  const tasksData = readJson(join(base, "tasks", "store.json")) as Array<{ status: string }> | null;
-
-  const agents = agentsData?.filter((a) => a.status !== "stopped").length ?? 0;
-
-  const tasks = {
-    p: tasksData?.filter((t) => t.status === "pending").length ?? 0,
-    r: tasksData?.filter((t) => t.status === "in_progress").length ?? 0,
-    c: tasksData?.filter((t) => t.status === "completed").length ?? 0,
-  };
 
   // Tests — count real files
   let tests = 0;
@@ -162,13 +147,7 @@ function collect(cwd: string): Data {
 
   return {
     user, branch, staged, modified, untracked, ahead, behind, model, modelCtx, duration,
-    agents,
-    swarm: {
-      on: swarmData?.status === "active",
-      topology: swarmData?.topology ?? "off",
-      max: swarmData?.maxAgents ?? 8,
-    },
-    tasks, vectors, tests, tools: getToolCount(),
+    vectors, tests, tools: getToolCount(),
   };
 }
 
@@ -194,11 +173,6 @@ function formatCompact(d: Data): string {
   }
 
   if (d.model) parts.push(`${ind}${d.model}${R}`);
-
-  if (d.agents > 0) parts.push(`${tl}${d.agents}${R} agents`);
-
-  const totalTasks = d.tasks.p + d.tasks.r + d.tasks.c;
-  if (totalTasks > 0) parts.push(`${yl}${d.tasks.r}${R}r ${gn}${d.tasks.c}${R}d ${gy}${d.tasks.p}${R}q`);
 
   if (d.vectors > 0) parts.push(`${tl}${d.vectors}${R} vecs`);
 
@@ -242,18 +216,8 @@ function format(d: Data): string {
   if (d.duration) h += `  ${gy}\u2502${R}  ${tl}\u23F1 ${d.duration}${R}`;
   lines.push(h);
 
-  // Line 2: agents + swarm + tasks (only if any activity)
+  // Line 2: project activity
   const parts2: string[] = [];
-
-  if (d.swarm.on || d.agents > 0) {
-    const sIcon = d.swarm.on ? `${gn}\u25C9${R}` : `${gy}\u25CB${R}`;
-    parts2.push(`${wm}agents${R} ${sIcon} ${d.agents > 0 ? gn : gy}${d.agents}${R}${gy}/${d.swarm.max}${R}`);
-  }
-
-  const totalTasks = d.tasks.p + d.tasks.r + d.tasks.c;
-  if (totalTasks > 0) {
-    parts2.push(`${wm}tasks${R} ${d.tasks.r > 0 ? yl : gy}${d.tasks.r}${R} running  ${gn}${d.tasks.c}${R} done  ${gy}${d.tasks.p} queued${R}`);
-  }
 
   if (d.vectors > 0) {
     parts2.push(`${wm}vectors${R} ${gn}${d.vectors}${R}`);
@@ -332,11 +296,6 @@ function collect(){
 
   // State
   const base=path.join(CWD,'.aiyoucli');
-  const ag=rj(path.join(base,'agents','store.json'))||[];
-  const sw=rj(path.join(base,'swarm','state.json'));
-  const tk=rj(path.join(base,'tasks','store.json'))||[];
-  const agents=ag.filter(a=>a.status!=='stopped').length;
-  const tasks={p:tk.filter(t=>t.status==='pending').length,r:tk.filter(t=>t.status==='in_progress').length,c:tk.filter(t=>t.status==='completed').length};
   let tests=0;for(const d of['__tests__','tests','test']){try{const dir=path.join(CWD,d);if(fs.existsSync(dir))tests+=fs.readdirSync(dir).filter(f=>f.includes('.test.')||f.includes('.spec.')).length}catch{}}
   let vectors=0;for(const vp of[path.join(CWD,'.aiyouvector','data'),path.join(base,'memory.db')]){try{const st=fs.statSync(vp);if(st){vectors=Math.floor(st.size/512);break}}catch{}}
 
@@ -345,7 +304,7 @@ function collect(){
   if(s&&s.cost){const ms=s.cost.total_duration_ms||0;const m=Math.floor(ms/60000);const sec=Math.floor((ms%60000)/1000);dur=m>0?m+'m'+sec+'s':sec+'s';costUsd=s.cost.total_cost_usd||0}
   if(s&&s.context_window)ctxPct=Math.floor(s.context_window.used_percentage||0);
 
-  return{user,branch,staged,modified,untracked,ahead,behind,model,agents,swarmOn:sw?sw.status==='active':false,swarmMax:sw?sw.maxAgents:8,tasks,vectors,tests,tools:41,dur,ctxPct,costUsd};
+  return{user,branch,staged,modified,untracked,ahead,behind,model,vectors,tests,tools:41,dur,ctxPct,costUsd};
 }
 
 function render(){
@@ -362,9 +321,6 @@ function render(){
   lines.push(h);
 
   const p2=[];
-  if(d.swarmOn||d.agents>0){const si=d.swarmOn?gn+'\\u25C9'+R:gy+'\\u25CB'+R;p2.push(wm+'agents'+R+' '+si+' '+(d.agents>0?gn:gy)+d.agents+R+gy+'/'+d.swarmMax+R)}
-  const tt=d.tasks.p+d.tasks.r+d.tasks.c;
-  if(tt>0)p2.push(wm+'tasks'+R+' '+(d.tasks.r>0?yl:gy)+d.tasks.r+R+' running  '+gn+d.tasks.c+R+' done  '+gy+d.tasks.p+' queued'+R);
   if(d.vectors>0)p2.push(wm+'vectors'+R+' '+gn+d.vectors+R);
   if(d.tests>0)p2.push(wm+'tests'+R+' '+gn+d.tests+R);
   if(p2.length>0)lines.push('  '+p2.join('  '+gy+'\\u2502'+R+'  '));
@@ -374,7 +330,7 @@ function render(){
 
 function renderJSON(){const d=collect();return{user:d.user,branch:d.branch,model:d.model,
   git:{staged:d.staged,modified:d.modified,untracked:d.untracked,ahead:d.ahead,behind:d.behind},
-  agents:d.agents,swarm:{on:d.swarmOn,max:d.swarmMax},tasks:d.tasks,vectors:d.vectors,tests:d.tests,tools:d.tools,
+  vectors:d.vectors,tests:d.tests,tools:d.tools,
   session:{duration:d.dur||null,contextPct:d.ctxPct||null,costUsd:d.costUsd||null},timestamp:new Date().toISOString()}}
 
 if(process.argv.includes('--json'))console.log(JSON.stringify(renderJSON(),null,2));

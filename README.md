@@ -83,29 +83,9 @@ aiyoucli statusline                    Rich terminal dashboard
 aiyoucli gcc                           Git context (branch, status, commits, diffs)
 ```
 
-### Agents & Orchestration
+### Agent Team
 
-```
-aiyoucli agent spawn --type <t> --name <n> --model <m>   Spawn an agent
-aiyoucli agent list                                       List active agents
-aiyoucli agent status --id <id>                           Agent status
-aiyoucli agent stop --id <id>                             Stop an agent
-aiyoucli agent record --id <id> --success --duration-ms   Record metrics
-aiyoucli agent metrics                                    Aggregate metrics
-
-aiyoucli swarm init --topology <t> --maxAgents <n> --strategy <s>
-aiyoucli swarm status
-aiyoucli swarm stop
-
-aiyoucli task create -d "description" -p <priority> -a <agent>
-aiyoucli task list
-aiyoucli task status --id <id>
-aiyoucli task complete --id <id>
-
-aiyoucli session start --id <id>
-aiyoucli session end --id <id>
-aiyoucli session list
-```
+Agent orchestration is provided by the `@aiyou-dev/team` OpenCode plugin. Use `aiyoucli setup` and `aiyoucli team` to install and manage it.
 
 ### Intelligence
 
@@ -135,29 +115,12 @@ aiyoucli security scan                               Security audit
 aiyoucli performance benchmark --vectors <n>         Vector benchmarks
 ```
 
-### Local AI & Models
-
-```
-aiyoucli models list --path <dir>                    Scan GGUF models
-aiyoucli models optimize --model <name>              Unsloth upgrade recommendations
-aiyoucli models start                                Interactive model launcher
-aiyoucli models stop                                 Stop running models
-aiyoucli models status                               Show active models
-
-aiyoucli rd init -q "query" -s <strategy> -i <n>    Initialize research session
-aiyoucli rd search -q "query" -e <engine>            Search (arxiv/pubmed/...)
-aiyoucli rd strategies                               List research strategies
-aiyoucli rd status --session-id <id>                 Session progress
-aiyoucli rd report --session-id <id> -f <format>     Generate report
-aiyoucli rd doc --path <file>                        Process document
-```
-
 ### MCP & Skills
 
 ```
 aiyoucli mcp start                                   Start MCP stdio server
 aiyoucli mcp status                                  Server status
-aiyoucli mcp tools                                   List all 84 tools
+aiyoucli mcp tools                                   List available tools
 
 aiyoucli skills sync                                 Sync & distill skills to TOON
 aiyoucli skills list                                 List installed skills
@@ -353,95 +316,19 @@ Leiden-like label propagation with configurable resolution. Returns clusters wit
 
 ### Tool Categories
 
-| Module | Tools | Highlights |
-|--------|------:|------------|
-| **Deep Research** | 8 | Multi-engine search (arXiv, PubMed, Semantic Scholar), knowledge graphs, citations (APA/MLA/Chicago/BibTeX) |
-| **Metrics** | 8 | Token tracking, cost calculation (opus/sonnet/haiku pricing), latency percentiles, memory usage |
-| **Proxy Gateway** | 10 | Chat completions, shield (prompt injection detection), compression, caching, embedding, segmentation |
-| **Agent Management** | 6 | Spawn/list/stop agents, record metrics, 8 agent types with model tiers |
-| **Vector Memory** | 6 | HNSW persistent storage (redb), insert/search/delete/count/stats |
-| **Semantic Router** | 5 | Keyword + embedding hybrid routing, 8 agent profiles |
-| **Hooks & Lifecycle** | 5 | Q-learning routing, pre/post task hooks, model tier selection, auto Wake-on-Request |
-| **Neural Learning** | 4 | SONA engine: observe, transform, learn, stats |
-| **Task Management** | 4 | Create/list/status/complete with priority queue |
-| **Code Analysis** | 3 | Diff classifier, commit classifier, complexity scorer |
-| **AST Analysis** | 3 | Multi-language AST (JS/TS/Python/Rust/Go/Java), function/class/import extraction |
-| **Session** | 3 | Start/end/list sessions with persistence |
-| **Swarm** | 3 | Init/status/stop with 5 topologies |
-| **Skills** | 3 | TOON sync, list, technology detection (45+ techs) |
-| **Models** | 2 | GGUF scanning, Unsloth Dynamic v2.0 recommendations |
-| **Distiller** | 2 | TOON markdown distillation (~52% fewer tokens) |
-| **Graph (aiyouvector)** | 14 | Index, search, trace, Cypher, architecture, schema, snippets |
-| **Config** | 2 | Dot-notation get/set |
-| **System** | 2 | Status overview, health diagnostics |
-| **Other** | 5 | Benchmark, security scan, coordination, git context, statusline |
-
----
-
-## Deep Research (`aiyoucli-rd`)
-
-Multi-engine research orchestration with NAPI-powered document processing and knowledge graphs.
-
-### Architecture
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    TypeScript Layer                           │
-│  ResearchEngine (src/rd/engine.ts)                           │
-│  Session lifecycle · Strategy management · State persistence │
-├──────────────────────────────────────────────────────────────┤
-│                    NAPI Bridge                                │
-│                    aiyoucli-rd.node                          │
-├──────────────────────────────────────────────────────────────┤
-│                    Rust Engine                                │
-│  rd_create_session    Session ID generation + JSON           │
-│  rd_search_web        Web search queue management            │
-│  rd_get_strategies    Strategy enumeration                   │
-│  rd_process_document  PDF/DOCX/image processing              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Strategies
-
-| Strategy | Description |
-|----------|-------------|
-| `langgraph-agent` | Autonomous agent with iterative research loop |
-| `source-based` | Focus on collecting and analyzing sources |
-| `focused-iteration` | Deep dive into specific subtopics |
-| `topic-organization` | Organize findings by topic clusters |
-| `quick` | Fast overview with minimal iterations |
-
-### MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `rd_init` | Initialize research session with query and strategy |
-| `rd_search` | Search across engines (arXiv, PubMed, Semantic Scholar, Wikipedia, SearXNG) |
-| `rd_strategies` | List available research strategies |
-| `rd_status` | Check research session progress |
-| `rd_report` | Generate markdown/json research report |
-| `rd_knowledge_graph` | View knowledge graph nodes and connections |
-| `rd_document_process` | Process PDF/DOCX/images with optional OCR |
-| `rd_citations` | Generate citations (APA, MLA, Chicago, BibTeX) |
-
-### Usage
-
-```sh
-# Start autonomous research
-aiyoucli rd init --query "Rust zero-copy deserialization patterns" --strategy langgraph-agent
-
-# Search academic papers
-aiyoucli rd search --query "HNSW vs IVF index performance" --engine arxiv
-
-# Check progress
-aiyoucli rd status --session-id rd_xxxx
-
-# Generate report
-aiyoucli rd report --session-id rd_xxxx --format markdown
-
-# Process scanned PDF
-aiyoucli rd doc --path paper.pdf --ocr
-```
+| Module | Highlights |
+|--------|------------|
+| **Metrics** | Token tracking, cost calculation, latency percentiles, memory usage |
+| **Proxy Gateway** | Chat completions, prompt-injection shield, compression, caching, embedding, segmentation |
+| **Vector Memory** | HNSW persistent storage (redb), insert/search/delete/count/stats |
+| **Semantic Router** | Keyword + embedding hybrid routing |
+| **Hooks & Lifecycle** | Q-learning routing and pre/post task hooks |
+| **Neural Learning** | SONA engine: observe, transform, learn, stats |
+| **Code & AST Analysis** | Diff, commit, complexity, and multi-language AST analysis |
+| **Skills** | TOON sync, listing, and technology detection |
+| **Distiller** | TOON markdown distillation |
+| **Graph (aiyouvector)** | Index, search, trace, Cypher, architecture, schema, snippets |
+| **Config & System** | Dot-notation configuration and health diagnostics |
 
 ---
 
@@ -479,15 +366,7 @@ Each agent role maps to an OpenCode session with custom model tier, temperature,
 
 ### 3. Statusline Hook
 
-Rich terminal dashboard showing agents, tasks, vectors, git status, model, and context — only data that actually exists.
-
-### 4. Local Model Launcher
-
-```sh
-aiyoucli models start
-```
-
-Interactive flow: MinIO health check → GPU detection → model selection → work mode (uni/dual/tree) → VRAM validation → download from MinIO → launch llama-server → update OpenCode config.
+Rich terminal dashboard showing vectors, tests, git status, model, and context — only data that actually exists.
 
 ---
 
@@ -497,7 +376,7 @@ Interactive flow: MinIO health check → GPU detection → model selection → w
 ┌──────────────────────────────────────────────────────────────┐
 │                     CLI / MCP Server                          │
 │                      (TypeScript)                             │
-│   25 commands · 84 MCP tools · production middleware          │
+│   CLI commands · MCP tools · production middleware             │
 │   Circuit breaker · Rate limiter · Retry + exponential backoff│
 ├──────────────────────────────────────────────────────────────┤
 │                    NAPI Bridge (two binaries)                 │
@@ -547,8 +426,6 @@ Benchmarks on Apple M-series. All in-process, no network calls.
 ```sh
 aiyoucli config set memory.dimensions 384
 aiyoucli config set memory.backend aiyouvector
-aiyoucli config set swarm.topology hierarchical
-aiyoucli config set swarm.maxAgents 8
 aiyoucli config set llm.base_url http://127.0.0.1:8000/v1
 ```
 
@@ -559,8 +436,6 @@ Environment variable overrides:
 | `AIYOUCLI_MEMORY_BACKEND` | `memory.backend` |
 | `AIYOUCLI_MEMORY_PATH` | `memory.storagePath` |
 | `AIYOUCLI_MEMORY_DIMENSIONS` | `memory.dimensions` |
-| `AIYOUCLI_SWARM_TOPOLOGY` | `swarm.topology` |
-| `AIYOUCLI_SWARM_MAX_AGENTS` | `swarm.maxAgents` |
 | `AIYOUCLI_MCP_PORT` | `mcp.port` |
 | `AIYOUCLI_VERBOSITY` | `cli.verbosity` |
 | `NO_COLOR` | `cli.color = false` |
@@ -586,16 +461,11 @@ Environment variable overrides:
 ├── config.json              # Project configuration
 ├── memory-config.json       # Vector DB config
 ├── vectors.redb             # Persistent vector database
-├── agents/store.json        # Agent registry
-├── swarm/state.json         # Swarm state
-├── tasks/store.json         # Task queue
-├── sessions/*.json          # Session files
 ├── q-table.json             # Q-Learning persistence
 ├── metrics/*.json           # Metrics snapshots
 ├── skills/*.dsi.toon        # TOON-distilled skill files
 ├── helpers/statusline.cjs   # Statusline script
-├── agents.dsi.toon          # TOON-distilled AGENTS.md
-└── models/                  # Downloaded GGUF models
+└── agents.dsi.toon          # TOON-distilled AGENTS.md
 ```
 
 ---

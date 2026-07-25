@@ -2,7 +2,7 @@
  * Phase 4 verify tests — vitest.
  *
  * Tests cover:
- *   - Each individual probe (system_doctor, capabilities, coordination, memory)
+ *   - Each individual probe (system_doctor, capabilities, memory)
  *   - Probe happy path, error path, edge cases
  *   - Report aggregation (clean, hasFailures, summary)
  *   - Parallel execution safety (all probes run even if one fails)
@@ -67,26 +67,6 @@ function makeCapabilitiesResponse(opts: {
   };
 }
 
-function makeCoordinationResponse(opts: {
-  swarmActive?: boolean;
-  topology?: string;
-  agentCount?: number;
-  taskCount?: number;
-}) {
-  return {
-    ok: true,
-    text: JSON.stringify({
-      swarm: {
-        active: opts.swarmActive ?? true,
-        topology: opts.topology ?? "hierarchical",
-        agentCount: opts.agentCount ?? 3,
-      },
-      agents: { total: opts.agentCount ?? 3, active: opts.agentCount ?? 3 },
-      tasks: { total: opts.taskCount ?? 0, running: 0, done: 0 },
-    }),
-  };
-}
-
 function makeMemoryResponse(count: number) {
   return {
     ok: true,
@@ -104,7 +84,6 @@ describe("runVerification", () => {
           { name: "git", status: "ok" },
         ]),
         capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(100),
       });
 
@@ -122,7 +101,6 @@ describe("runVerification", () => {
           { name: "napi", status: "fail" },
         ]),
         capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
 
@@ -136,7 +114,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: { ok: false, text: "napi binary missing", isError: true },
         capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
 
@@ -155,7 +132,6 @@ describe("runVerification", () => {
           teamAvailable: true,
           embedRunning: true,
         }),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
 
@@ -170,7 +146,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({ napi: false }),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
 
@@ -184,7 +159,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({ teamAvailable: false }),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
 
@@ -197,7 +171,6 @@ describe("runVerification", () => {
       const stubRunning = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({ embedRunning: true }),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
       const report1 = await runVerification({ cwd: "/tmp", callTool: stubRunning });
@@ -207,7 +180,6 @@ describe("runVerification", () => {
       const stubStopped = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({ embedRunning: false }),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
       const report2 = await runVerification({ cwd: "/tmp", callTool: stubStopped });
@@ -219,7 +191,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: { ok: true, text: "not json" },
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
 
@@ -230,40 +201,11 @@ describe("runVerification", () => {
     });
   });
 
-  describe("coordination probe", () => {
-    it("reports ok when swarm is active with agents", async () => {
-      const stub = makeStub({
-        system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
-        capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({ swarmActive: true, agentCount: 3 }),
-        memory_count: makeMemoryResponse(0),
-      });
-      const report = await runVerification({ cwd: "/tmp", callTool: stub });
-      const row = report.rows.find((r) => r.name === "Coordination")!;
-      expect(row.status).toBe("ok");
-      expect(row.detail).toContain("3 agents");
-    });
-
-    it("reports degraded when swarm is not active", async () => {
-      const stub = makeStub({
-        system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
-        capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({ swarmActive: false }),
-        memory_count: makeMemoryResponse(0),
-      });
-      const report = await runVerification({ cwd: "/tmp", callTool: stub });
-      const row = report.rows.find((r) => r.name === "Coordination")!;
-      expect(row.status).toBe("degraded");
-      expect(row.suggestion).toContain("warmup");
-    });
-  });
-
   describe("memory probe", () => {
     it("reports ok with count when vectors exist", async () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(1247),
       });
       const report = await runVerification({ cwd: "/tmp", callTool: stub });
@@ -277,7 +219,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
       const report = await runVerification({ cwd: "/tmp", callTool: stub });
@@ -290,7 +231,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({}),
         memory_count: { ok: false, text: "napi unavailable", isError: true },
       });
       const report = await runVerification({ cwd: "/tmp", callTool: stub });
@@ -305,12 +245,11 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: { ok: false, text: "boom", isError: true },
         capabilities: makeCapabilitiesResponse({}),
-        status: makeCoordinationResponse({}),
         memory_count: makeMemoryResponse(0),
       });
       const report = await runVerification({ cwd: "/tmp", callTool: stub });
-      // We expect: Doctor (failed) + 3 capability rows + Coordination + Memory = 6
-      expect(report.rows.length).toBeGreaterThanOrEqual(6);
+      // We expect: Doctor (failed) + 3 capability rows + Memory = 5
+      expect(report.rows.length).toBeGreaterThanOrEqual(5);
       expect(report.hasFailures).toBe(true);
       expect(report.clean).toBe(false);
     });
@@ -319,7 +258,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({ embedRunning: false }),
-        status: makeCoordinationResponse({ swarmActive: true, agentCount: 2 }),
         memory_count: makeMemoryResponse(50),
       });
       const report = await runVerification({ cwd: "/tmp", callTool: stub });
@@ -332,7 +270,6 @@ describe("runVerification", () => {
       const stub = makeStub({
         system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
         capabilities: makeCapabilitiesResponse({ embedRunning: false }),
-        status: makeCoordinationResponse({ swarmActive: true, agentCount: 1 }),
         memory_count: makeMemoryResponse(10),
       });
       const report = await runVerification({ cwd: "/tmp", callTool: stub });
@@ -347,7 +284,6 @@ describe("renderInitSummary", () => {
     const stub = makeStub({
       system_doctor: makeDoctorResponse(true, [{ name: "node", status: "ok" }]),
       capabilities: makeCapabilitiesResponse({ embedRunning: false }),
-      status: makeCoordinationResponse({ swarmActive: true, agentCount: 2 }),
       memory_count: makeMemoryResponse(50),
     });
 

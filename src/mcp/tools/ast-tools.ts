@@ -14,7 +14,7 @@ function getEngine(): any {
   if (!proxyEngine) {
     try {
       const mod = require("../../napi/proxy.js");
-      proxyEngine = mod.getProxyEngine?.() ?? null;
+      proxyEngine = mod.createProxyEngine();
     } catch { return null; }
   }
   return proxyEngine;

@@ -185,7 +185,7 @@ Persistent vector memory via Rust NAPI (HNSW index, SIMD-accelerated):
 ### Stats (consolidated)
 
 Get statistics for any subsystem in one tool:
-- \`stats\` with \`scope: memory|agents|routing|neural|semantic|cache|full\`
+- \`stats\` with \`scope: memory|routing|neural|semantic|cache|full\`
 
 ### Neural Learning (SONA)
 
@@ -197,45 +197,32 @@ Continuous learning without catastrophic forgetting via MicroLoRA adapters:
 ### Hooks & Routing
 
 Lifecycle hooks with Q-learning task routing:
-- \`hooks_pre_task\` — pre-task hook: routing recommendation, auto-start local models
+- \`hooks_pre_task\` — pre-task hook: routing recommendation
 - \`hooks_post_task\` — post-task hook: record reward in Q-table, persist to disk
 - \`route\` — unified routing: \`action: qlearn|model_tier|keyword|hybrid|enhanced\`
 
 ### Status (consolidated)
 
 Get system status in one tool:
-- \`status\` with \`scope: system|coordination|statusline|swarm\`
-
-### Deep Research (NAPI-powered)
-
-Multi-engine web research with Rust NAPI orchestration:
-- \`rd_init\` — start research session (langgraph-agent, source-based, focused-iteration, quick)
-- \`rd_search\` — search across engines (arXiv, PubMed, Semantic Scholar, Wikipedia, SearXNG)
-- \`rd_report\` — generate markdown/json research report
-- \`rd_knowledge_graph\` — view knowledge graph nodes and connections
-- \`rd_document_process\` — process PDF/DOCX/images with optional OCR (Rust NAPI)
-- \`rd_citations\` — generate citations (APA, MLA, Chicago, BibTeX)
+- \`status\` with \`scope: system|statusline\`
 `;
 
   const mcpTools = `
-## Available MCP Tools (60)
-
-8 consolidated tools (replacing 29 redundant) + 2 discovery tools + 50 individual tools.
+## Available MCP Tools
 
 ### Consolidated tools (use \`action\` / \`scope\` / \`mode\` / \`type\` param)
 
-| Tool | Replaces | Dispatch |
-|------|----------|----------|
-| \`route\` | hooks_route, hooks_model_route, semantic_route, semantic_route_hybrid, semantic_route_enhanced | \`action: qlearn|model_tier|keyword|hybrid|enhanced\` |
-| \`status\` | system_status, coordination_status, statusline, swarm_status | \`scope: system|coordination|statusline|swarm\` |
-| \`stats\` | memory_stats, agent_metrics, hooks_stats, neural_stats, semantic_stats, proxy_cache_stats, metrics_snapshot | \`scope: memory|agents|routing|neural|semantic|cache|full\` |
-| \`metrics\` | metrics_record_tokens, cost, memory, latency, tools_summary, save, reset | \`action: record_tokens|cost|memory|latency|tools_summary|save|reset\` |
-| \`embed\` | proxy_embed, semantic_embed | \`type: onnx|keyword\` |
-| \`models\` | models_list, models_optimize, models_start, models_stop, models_status, proxy_list_models | \`action: list|optimize|start|stop|status|list_remote\` |
-| \`analyze\` | analyze_diff, analyze_commit, analyze_complexity | \`type: diff|commit|complexity\` |
-| \`ast\` | ast_analyze, ast_analyze_batch, ast_detect_language | \`mode: analyze|batch|detect\` |
+| Tool | Dispatch |
+|------|----------|
+| \`route\` | \`action: qlearn|model_tier|keyword|hybrid|enhanced\` |
+| \`status\` | \`scope: system|statusline\` |
+| \`stats\` | \`scope: memory|routing|neural|semantic|cache|full\` |
+| \`metrics\` | \`action: record_tokens|cost|memory|latency|tools_summary|save|reset\` |
+| \`embed\` | \`type: onnx|keyword\` |
+| \`analyze\` | \`type: diff|commit|complexity\` |
+| \`ast\` | \`mode: analyze|batch|detect\` |
 
-### Discovery tools (expose aiyouvector + aiyou-team to MCP clients)
+### Discovery tools
 
 | Tool | Description |
 |------|-------------|
@@ -244,24 +231,19 @@ Multi-engine web research with Rust NAPI orchestration:
 
 ### Individual tools by category
 
-| Category | Count | Tools |
-|----------|-------|-------|
-| Memory | 5 | memory_init, memory_store, memory_search, memory_count, memory_delete |
-| Agent | 5 | agent_spawn, agent_list, agent_status, agent_stop, agent_record |
-| Swarm | 2 | swarm_init, swarm_stop |
-| Task | 4 | task_create, task_list, task_status, task_complete |
-| Session | 3 | session_start, session_end, session_list |
-| Hooks | 2 | hooks_pre_task, hooks_post_task |
-| Config | 2 | config_get, config_set |
-| System | 1 | system_doctor |
-| Neural | 3 | neural_observe, neural_transform, neural_learn |
-| Security | 1 | security_scan |
-| Performance | 1 | perf_benchmark |
-| Distiller | 2 | distill_markdown, distill_file |
-| Skills | 3 | skills_sync, skills_list, skills_detect |
-| Proxy | 7 | proxy_health, proxy_chat, proxy_compress, proxy_shield_check, proxy_estimate_cost, proxy_analyze_text, proxy_segment |
-| Deep Research | 8 | rd_init, rd_search, rd_strategies, rd_status, rd_report, rd_knowledge_graph, rd_document_process, rd_citations |
-| GCC | 1 | git_context |
+| Category | Tools |
+|----------|-------|
+| Memory | memory_init, memory_store, memory_search, memory_count, memory_delete |
+| Hooks | hooks_pre_task, hooks_post_task |
+| Config | config_get, config_set |
+| System | system_doctor |
+| Neural | neural_observe, neural_transform, neural_learn |
+| Security | security_scan |
+| Performance | perf_benchmark |
+| Distiller | distill_markdown, distill_file |
+| Skills | skills_sync, skills_list, skills_detect |
+| Proxy | proxy_health, proxy_chat, proxy_compress, proxy_shield_check, proxy_estimate_cost, proxy_analyze_text, proxy_segment |
+| GCC | git_context |
 `;
 
   // Conditional section: only include agent delegation table when the plugin is installed.
@@ -335,7 +317,7 @@ Install with: \`npm install -g @aiyou-dev/team && aiyou-team setup\`
   const conventions = `
 ## Conventions
 
-- All state lives in \`.aiyoucli/\` (vectors, agents, swarm, tasks, sessions, Q-table, metrics, skills)
+- All state lives in \`.aiyoucli/\` (vectors, Q-table, metrics, skills)
 - Config: \`aiyoucli.config.json\` or \`.aiyoucli/config.json\`
 - Vector memory: \`.aiyoucli/vectors.redb\` (HNSW + redb persistence)
 - Q-learning: \`.aiyoucli/q-table.json\` (auto-saved on post_task)

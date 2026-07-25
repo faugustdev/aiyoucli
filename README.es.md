@@ -83,29 +83,9 @@ aiyoucli statusline                    Panel de control en terminal
 aiyoucli gcc                           Contexto git (rama, estado, commits, diffs)
 ```
 
-### Agentes y Orquestación
+### Equipo de agentes
 
-```
-aiyoucli agent spawn --type <t> --name <n> --model <m>   Crear un agente
-aiyoucli agent list                                       Listar agentes activos
-aiyoucli agent status --id <id>                           Estado del agente
-aiyoucli agent stop --id <id>                             Detener un agente
-aiyoucli agent record --id <id> --success --duration-ms   Registrar métricas
-aiyoucli agent metrics                                    Métricas agregadas
-
-aiyoucli swarm init --topology <t> --maxAgents <n> --strategy <s>
-aiyoucli swarm status
-aiyoucli swarm stop
-
-aiyoucli task create -d "descripción" -p <prioridad> -a <agente>
-aiyoucli task list
-aiyoucli task status --id <id>
-aiyoucli task complete --id <id>
-
-aiyoucli session start --id <id>
-aiyoucli session end --id <id>
-aiyoucli session list
-```
+La orquestación de agentes se ofrece mediante el plugin `@aiyou-dev/team` para OpenCode. Usa `aiyoucli setup` y `aiyoucli team` para instalarlo y gestionarlo.
 
 ### Inteligencia
 
@@ -135,29 +115,12 @@ aiyoucli security scan                               Auditoría de seguridad
 aiyoucli performance benchmark --vectors <n>         Benchmarks vectoriales
 ```
 
-### AI Local y Modelos
-
-```
-aiyoucli models list --path <dir>                    Escanear modelos GGUF
-aiyoucli models optimize --model <nombre>            Recomendaciones de mejora Unsloth
-aiyoucli models start                                Lanzador interactivo de modelos
-aiyoucli models stop                                 Detener modelos en ejecución
-aiyoucli models status                               Mostrar modelos activos
-
-aiyoucli rd init -q "consulta" -s <estrategia> -i <n>  Iniciar sesión de investigación
-aiyoucli rd search -q "consulta" -e <motor>             Buscar (arxiv/pubmed/...)
-aiyoucli rd strategies                                  Listar estrategias de investigación
-aiyoucli rd status --session-id <id>                    Progreso de la sesión
-aiyoucli rd report --session-id <id> -f <formato>       Generar reporte
-aiyoucli rd doc --path <archivo>                        Procesar documento
-```
-
 ### MCP y Skills
 
 ```
 aiyoucli mcp start                                   Iniciar servidor MCP stdio
 aiyoucli mcp status                                  Estado del servidor
-aiyoucli mcp tools                                   Listar las 84 herramientas
+aiyoucli mcp tools                                   Listar herramientas disponibles
 
 aiyoucli skills sync                                 Sincronizar y destilar skills a TOON
 aiyoucli skills list                                 Listar skills instaladas
@@ -353,28 +316,17 @@ Propagación de etiquetas tipo Leiden con resolución configurable. Retorna clus
 
 ### Categorías de Herramientas
 
-| Módulo | Herramientas | Destacados |
-|--------|------------:|------------|
-| **Investigación Profunda** | 8 | Búsqueda multi-motor (arXiv, PubMed, Semantic Scholar), grafos de conocimiento, citas (APA/MLA/Chicago/BibTeX) |
-| **Métricas** | 8 | Seguimiento de tokens, cálculo de costos (precios opus/sonnet/haiku), percentiles de latencia, uso de memoria |
-| **Proxy Gateway** | 10 | Completaciones de chat, shield (detección de inyección de prompts), compresión, caché, embedding, segmentación |
-| **Gestión de Agentes** | 6 | Crear/listar/detener agentes, registrar métricas, 8 tipos de agente con tiers de modelo |
-| **Memoria Vectorial** | 6 | Almacenamiento persistente HNSW (redb), insertar/buscar/eliminar/contar/estadísticas |
-| **Router Semántico** | 5 | Enrutamiento híbrido keywords + embedding, 8 perfiles de agente |
-| **Hooks y Ciclo de Vida** | 5 | Enrutamiento Q-learning, hooks pre/post tarea, selección de tier de modelo, Wake-on-Request automático |
-| **Aprendizaje Neural** | 4 | Motor SONA: observar, transformar, aprender, estadísticas |
-| **Gestión de Tareas** | 4 | Crear/listar/estado/completar con cola de prioridad |
-| **Análisis de Código** | 3 | Clasificador de diffs, clasificador de commits, puntuación de complejidad |
-| **Análisis AST** | 3 | AST multi-lenguaje (JS/TS/Python/Rust/Go/Java), extracción de funciones/clases/imports |
-| **Sesión** | 3 | Iniciar/terminar/listar sesiones con persistencia |
-| **Swarm** | 3 | Init/estado/stop con 5 topologías |
-| **Skills** | 3 | Sync TOON, listar, detección de tecnologías (45+ techs) |
-| **Modelos** | 2 | Escaneo GGUF, recomendaciones Unsloth Dynamic v2.0 |
-| **Destilador** | 2 | Destilación TOON de markdown (~52% menos tokens) |
-| **Grafo (aiyouvector)** | 14 | Indexar, buscar, trazar, Cypher, arquitectura, esquema, fragmentos |
-| **Configuración** | 2 | Leer/escribir con notación de puntos |
-| **Sistema** | 2 | Resumen de estado, diagnóstico de salud |
-| **Otros** | 5 | Benchmark, scan de seguridad, coordinación, contexto git, statusline |
+| Módulo | Destacados |
+|--------|------------|
+| **Métricas** | Seguimiento de tokens, cálculo de costos, percentiles de latencia y memoria |
+| **Proxy Gateway** | Chat, shield de inyección de prompts, compresión, caché, embedding y segmentación |
+| **Memoria Vectorial** | Almacenamiento HNSW persistente con redb |
+| **Router Semántico** | Enrutamiento híbrido de keywords y embeddings |
+| **Hooks y Ciclo de Vida** | Enrutamiento Q-learning y hooks pre/post tarea |
+| **Aprendizaje Neural** | Motor SONA: observar, transformar, aprender y estadísticas |
+| **Análisis de Código y AST** | Diffs, commits, complejidad y AST multi-lenguaje |
+| **Skills** | Sync TOON, listado y detección tecnológica |
+| **Grafo (aiyouvector)** | Indexar, buscar, trazar, Cypher, arquitectura y esquema |
 
 ---
 
@@ -412,15 +364,7 @@ Cada rol de agente se mapea a una sesión de OpenCode con tier de modelo, temper
 
 ### 3. Hook de Statusline
 
-Panel de control en terminal mostrando agentes, tareas, vectores, estado git, modelo y contexto — solo datos que realmente existen.
-
-### 4. Lanzador de Modelos Locales
-
-```sh
-aiyoucli models start
-```
-
-Flujo interactivo: Verificación de salud MinIO → Detección de GPU → Selección de modelo → Modo de trabajo (uni/dual/árbol) → Validación de VRAM → Descarga desde MinIO → Lanzar llama-server → Actualizar config de OpenCode.
+Panel de control en terminal mostrando vectores, tests, estado git, modelo y contexto — solo datos que realmente existen.
 
 ---
 
@@ -430,7 +374,7 @@ Flujo interactivo: Verificación de salud MinIO → Detección de GPU → Selecc
 ┌──────────────────────────────────────────────────────────────┐
 │                     CLI / Servidor MCP                        │
 │                      (TypeScript)                             │
-│   25 comandos · 84 herr. MCP · middleware de producción       │
+│   Comandos CLI · herramientas MCP · middleware de producción    │
 │   Circuit breaker · Rate limiter · Retry + backoff exponencial│
 ├──────────────────────────────────────────────────────────────┤
 │                    Puente NAPI (binario único)                │
@@ -480,8 +424,6 @@ Benchmarks en Apple M-series. Todo en proceso, sin llamadas de red.
 ```sh
 aiyoucli config set memory.dimensions 384
 aiyoucli config set memory.backend aiyouvector
-aiyoucli config set swarm.topology hierarchical
-aiyoucli config set swarm.maxAgents 8
 aiyoucli config set llm.base_url http://127.0.0.1:8000/v1
 ```
 
@@ -492,8 +434,6 @@ Variables de entorno:
 | `AIYOUCLI_MEMORY_BACKEND` | `memory.backend` |
 | `AIYOUCLI_MEMORY_PATH` | `memory.storagePath` |
 | `AIYOUCLI_MEMORY_DIMENSIONS` | `memory.dimensions` |
-| `AIYOUCLI_SWARM_TOPOLOGY` | `swarm.topology` |
-| `AIYOUCLI_SWARM_MAX_AGENTS` | `swarm.maxAgents` |
 | `AIYOUCLI_MCP_PORT` | `mcp.port` |
 | `AIYOUCLI_VERBOSITY` | `cli.verbosity` |
 | `NO_COLOR` | `cli.color = false` |
@@ -519,16 +459,11 @@ Variables de entorno:
 ├── config.json              # Configuración del proyecto
 ├── memory-config.json       # Config de base de datos vectorial
 ├── vectors.redb             # Base de datos vectorial persistente
-├── agents/store.json        # Registro de agentes
-├── swarm/state.json         # Estado del swarm
-├── tasks/store.json         # Cola de tareas
-├── sessions/*.json          # Archivos de sesión
 ├── q-table.json             # Persistencia Q-Learning
 ├── metrics/*.json           # Snapshots de métricas
 ├── skills/*.dsi.toon        # Skills destiladas a formato TOON
 ├── helpers/statusline.cjs   # Script de statusline
-├── agents.dsi.toon          # AGENTS.md destilado a TOON
-└── models/                  # Modelos GGUF descargados
+└── agents.dsi.toon          # AGENTS.md destilado a TOON
 ```
 
 ---

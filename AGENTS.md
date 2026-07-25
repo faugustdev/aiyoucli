@@ -101,29 +101,26 @@ aiyoucli/
       client.ts                       # Tool registry + dispatch (with circuit breaker + retry)
       types.ts                        # JSON-RPC message types
       tools/
-        index.ts                      # Registers all 22 tool modules (76 tools total)
-        memory-tools.ts               # 6 tools: init, store, search, count, stats, delete (NAPI)
-        agent-tools.ts                # 6 tools: spawn, list, status, stop, record, metrics (file persistence)
-        swarm-tools.ts                # 3 tools: init, status, stop (file persistence)
-        task-tools.ts                 # 4 tools: create, list, status, complete (file persistence)
-        session-tools.ts              # 3 tools: start, end, list (file persistence)
-        hooks-tools.ts                # 5 tools: pre_task, post_task, route, model_route, stats (NAPI routing)
-        config-tools.ts               # 2 tools: get, set
-        system-tools.ts               # 2 tools: status, doctor
-        analyze-tools.ts              # 3 tools: diff, commit, complexity (NAPI analysis)
-        neural-tools.ts               # 4 tools: observe, transform, learn, stats (NAPI sona)
-        gcc-tools.ts                  # 1 tool: git_context
-        security-tools.ts             # 1 tool: scan (npm audit + git checks)
-        performance-tools.ts          # 1 tool: benchmark (NAPI vector perf)
-        coordination-tools.ts         # 1 tool: status (aggregates swarm + agents + tasks)
-        statusline-tools.ts           # 1 tool: statusline dashboard
-        metrics-tools.ts              # 8 tools: snapshot, record_tokens, cost, memory, latency, tools_summary, save, reset
-        distiller-tools.ts            # 2 tools: distill_markdown, distill_file
-        skills-tools.ts               # 3 tools: sync, list, detect
-        proxy-tools.ts                # 10 tools: chat, health, shield_check, compress, analyze_text, segment, list_models, estimate_cost, embed, cache_stats
-        ast-tools.ts                  # 3 tools: ast_analyze, ast_analyze_batch, ast_detect_language
-        semantic-tools.ts             # 5 tools: route, route_hybrid, route_enhanced, embed, stats
-        models-tools.ts               # 2 tools: list, optimize (GGUF model management + Unsloth recommendations)
+        index.ts                      # Registers 41 MCP tools
+        memory-tools.ts               # Persistent vector memory
+        hooks-tools.ts                # Q-learning lifecycle hooks
+        config-tools.ts               # Configuration get/set
+        system-tools.ts               # Health diagnostics
+        analyze-tools.ts              # Diff, commit, and complexity analysis
+        neural-tools.ts               # SONA learning
+        gcc-tools.ts                  # Git context
+        security-tools.ts             # Security scan
+        performance-tools.ts          # Vector benchmark
+        distiller-tools.ts            # TOON distillation
+        skills-tools.ts               # Skill sync, list, and detection
+        proxy-tools.ts                # LLM gateway operations
+        ast-tools.ts                  # Multi-language AST analysis
+        discovery-tools.ts            # Capabilities and versions
+        route-tools.ts                # Q-learning and semantic routing
+        status-tools.ts               # System and statusline views
+        stats-tools.ts                # Subsystem metrics
+        embed-tools.ts                # ONNX and keyword embeddings
+        graph-tools.ts                # Knowledge graph operations
 
     commands/
       index.ts                        # CLI commands — thin wrappers calling MCP tools
@@ -136,7 +133,7 @@ aiyoucli/
       settings-generator.ts           # Generates CLAUDE.md, GEMINI.md, .claude/settings.json, statusline.cjs
       wire-validate.ts                # Phase 2 — Environment probe (node, git, napi, aiyou-team)
       verify.ts                       # Phase 4 — Health verification (doctor, NAPI, capabilities)
-      warmup.ts                       # Phase 3 — Warmup orchestrator (memory, graph, q-table, swarm, agents, proxy, rd, skills, index)
+      warmup.ts                       # Phase 3 — Warmup orchestrator (memory, graph, q-table, neural baseline, proxy, skills, index)
       indexer-chunk.ts                # File chunking (2000 chars + 200 overlap)
       indexer-embed.ts                # Parallel embedding + storage (max 8 concurrent)
       indexer-auto.ts                 # Git-aware auto-indexer with manifest tracking
@@ -167,57 +164,34 @@ aiyoucli/
     indexer-auto.test.ts              # Git-aware auto-indexer tests
 ```
 
-## CLI Commands (23)
+## CLI Commands
 
-| Command | Subcommands | What it does |
-|---------|-------------|--------------|
-| `init` | | Generate AGENTS.md, CLAUDE.md, GEMINI.md, settings, statusline (4-phase: wire → write → warm → verify) |
-| `agent` | spawn, list, status, stop, record, metrics | Agent lifecycle management |
-| `swarm` | init, status, stop | Multi-agent swarm coordination |
-| `memory` | init, store, search, list, stats, delete | Vector memory via Rust NAPI |
-| `mcp` | start, status, tools | MCP server management |
-| `task` | create, list, status, complete | Task lifecycle |
-| `session` | start, end, list | Session state persistence |
-| `hooks` | route, pre-task, post-task, stats | Lifecycle hooks + Q-learning routing |
-| `config` | get, set | Configuration management |
-| `status` | | System status overview |
-| `doctor` | | Health diagnostics (Node, NAPI, git) |
-| `neural` | observe, learn, stats | SONA learning engine |
-| `security` | scan | npm audit + git secret detection |
-| `analyze` | diff, commit, complexity | Code analysis via Rust NAPI |
-| `route` | | Task-to-agent routing (Q-learning + model tier) |
-| `gcc` | | Git context controller |
-| `daemon` | | Background worker daemon |
-| `completions` | | Shell completions (bash/zsh) |
-| `update` | | Self-update (placeholder) |
-| `performance` | benchmark | Vector search benchmarking |
-| `statusline` | | Rich status dashboard (supports --json, --generate) |
-| `models` | list, optimize | GGUF model management + Unsloth Dynamic v2.0 recommendations |
-| `skills` | sync, list, detect | Skill discovery and TOON distillation |
-| `rd` | init, search, strategies, status, report, doc | Deep research (strategies, search, documents, knowledge graph) |
+Run `aiyoucli --help` for the live command tree. The current set covers:
 
-## MCP Tools (60)
+- **Bootstrap**: `init`, `setup`, `doctor`, `status`, `statusline`
+- **MCP**: `mcp start|status|tools`
+- **Memory**: `memory init|store|search|list|stats|delete`
+- **Learning**: `neural observe|learn|stats`, `hooks route|pre-task|post-task|stats`
+- **Routing**: `route <description>`
+- **Analysis**: `analyze diff|commit|complexity`, `security scan`, `performance benchmark`
+- **Graph**: `graph bootstrap|neighbors|stats`, `daemon`
+- **Skills**: `skills sync|list|detect`
+- **Git**: `gcc`
+- **Ext**: `team` (delegates to `@aiyou-dev/team`)
+- **Config**: `config get|set`
+- **Meta**: `completions`, `update`
 
-The CLI exposes 60 tools via MCP protocol (JSON-RPC over stdio). Claude Code, Gemini CLI, or any MCP client can call these tools.
+Agent orchestration is owned by `@aiyou-dev/team` (OpenCode plugin). Claude Code support for the same team is deferred — see `plans/aiyoucli-deferred-work.md`.
 
-To see all tools: `aiyoucli mcp tools`
+## MCP Tools
+
+The CLI exposes 41 tools via MCP protocol (JSON-RPC over stdio). Claude Code, Gemini CLI, or any MCP client can call these tools.
+
+The live list is authoritative — run `aiyoucli mcp tools` to see the current registry. Hardcoded counts in this document are stale the moment a tool is added or removed.
 
 Tool dispatch includes production hardening: circuit breaker (threshold=10, reset=15s) and retry with exponential backoff (1 retry, 500ms base).
 
-### Consolidated Tools (8 tools replacing 29)
-
-| Consolidated tool | Replaces | Dispatch param |
-|---|---|---|
-| `route` | hooks_route, hooks_model_route, semantic_route, semantic_route_hybrid, semantic_route_enhanced | `action: qlearn|model_tier|keyword|hybrid|enhanced` |
-| `status` | system_status, coordination_status, statusline, swarm_status | `scope: system|coordination|statusline|swarm` |
-| `stats` | memory_stats, agent_metrics, hooks_stats, neural_stats, semantic_stats, proxy_cache_stats, metrics_snapshot | `scope: memory|agents|routing|neural|semantic|cache|full` |
-| `metrics` | metrics_record_tokens, cost, memory, latency, tools_summary, save, reset | `action: record_tokens|cost|memory|latency|tools_summary|save|reset` |
-| `embed` | proxy_embed, semantic_embed | `type: onnx|keyword` |
-| `models` | models_list, models_optimize, models_start, models_stop, models_status, proxy_list_models | `action: list|optimize|start|stop|status|list_remote` |
-| `analyze` | analyze_diff, analyze_commit, analyze_complexity | `type: diff|commit|complexity` |
-| `ast` | ast_analyze, ast_analyze_batch, ast_detect_language | `mode: analyze|batch|detect` |
-
-### Discovery Tools (2 new — exposes aiyouvector + aiyou-team to MCP clients)
+Discovery tools expose aiyouvector and aiyou-team to MCP clients:
 
 | Tool | Description |
 |---|---|
@@ -226,24 +200,7 @@ Tool dispatch includes production hardening: circuit breaker (threshold=10, rese
 
 AST TypeScript bridge: `src/napi/proxy.ts` — adds `analyzeCode`, `analyzeCodeBatch`, `detectLanguage`, `semanticRoute`, `semanticRouteHybrid`, `semanticEmbed`, `semanticStats` to `ProxyEngineHandle`.
 
-Semantic enhancement: `src/semantic/agent-profiles.ts` — 8 agent profiles with keyword scoring, cosine similarity, hybrid score computation using gateway embeddings with keyword fallback.
-
-### Phase 5 — Deep Research (aiyoucli-rd)
-
-| Tool | Description |
-|------|-------------|
-| `rd_init` | Initialize a deep research session with strategy and config |
-| `rd_search` | Web search across engines (searxng, arxiv, pubmed, semantic-scholar, wikipedia) |
-| `rd_document_process` | Process PDF/DOCX/image documents via bgustdown/bgustreadimg pipeline |
-| `rd_strategies` | List available research strategies with descriptions |
-| `rd_status` | Check research session status |
-| `rd_knowledge_graph` | View knowledge graph nodes and connections for a session |
-| `rd_citations` | Generate citations from session sources (APA/MLA/Chicago/BibTeX) |
-| `rd_report` | Generate markdown/json research report from completed session |
-
-TypeScript bridge: `src/rd/engine.ts` — `ResearchEngine` class with session lifecycle, strategy management, `getResearchEngine()` singleton.
-
-Rust NAPI crate: `crates/aiyoucli-rd/src/lib.rs` — Fast NAPI functions for session creation, strategy listing, document processing (builds independently, no aiyouvector deps).
+Deep research (`rd_*`) is implemented internally but not registered on the MCP surface. Finish it before exposing it — see `plans/aiyoucli-deferred-work.md`.
 
 ## ONNX Embedding Server
 
@@ -284,19 +241,12 @@ Performance: ~18us/vector insert, ~256us/search query, <0.01ms SONA adaptation.
 The statusline shows an honest dashboard — only data that actually exists:
 
 ```
-# Minimal (no active state)
 aiyoucli  Francisco August  |  main +3~1  |  Opus 4.6 (1M context)  |  12m30s
-  84 mcp tools available
-
-# With activity
-aiyoucli  Francisco August  |  main +3~1  |  Opus 4.6 (1M context)  |  12m30s
-  agents 2/8  |  tasks 1 running  3 done  2 queued  |  vectors 150
-  84 mcp tools available
+  41 mcp tools available
 
 # With Claude Code stdin data (context %, cost)
 aiyoucli  Francisco August  |  main +3~1  |  Opus 4.6 (1M context)  |  213m56s  |  40% ctx  |  $48.29
-  agents 2/8  |  tasks 1 running  3 done  2 queued
-  84 mcp tools available
+  41 mcp tools available
 ```
 
 Palette: indigo, teal, warm peach, soft green, soft yellow, soft red.
@@ -326,23 +276,20 @@ Integrates with:
 | 1 | Write | `agentsmd-generator.ts`, `settings-generator.ts` | Generate AGENTS.md, CLAUDE.md, GEMINI.md, settings, statusline |
 | 2 | Wire | `wire-validate.ts` | Probe node, git, napi, aiyou-team binaries (read-only) |
 | 2b | Team Setup | `team-setup.ts` | Auto-install aiyou-team if missing |
-| 3 | Warmup | `warmup.ts` | Initialize memory, graph, q-table, swarm, agents, proxy health, skills detect, auto-index |
-| 4 | Verify | `verify.ts` | Aggregate health signals (doctor, capabilities, coordination, memory) |
+| 3 | Warmup | `warmup.ts` | Initialize memory, graph, q-table, neural baseline, proxy health, skills detect, auto-index |
+| 4 | Verify | `verify.ts` | Aggregate health signals (doctor, capabilities, memory) |
 
 ### Phase 3 — Warmup Steps
 
-The warmup orchestrator runs the following 10 steps (each independent — failures don't block others):
+The warmup orchestrator runs the following steps (each independent — failures don't block others):
 
-1. `memory_init` — Initialize HNSW 384-dim vector memory
-2. `graph_bootstrap` — Bootstrap knowledge graph with project + agents
+1. `memory_init` — Initialize HNSW 8-dim vector memory (keyword embeddings)
+2. `graph_bootstrap` — Bootstrap knowledge graph with project metadata
 3. `q_table_seed` — Seed Q-Learning routing table with 24 entries
-4. `swarm_init` — Initialize hierarchical swarm (5 agents)
-5. `agent_spawn:coder`, `agent_spawn:researcher`, `agent_spawn:reviewer` — Spawn 3 baseline agents
-6. `neural_observe` — Submit baseline SONA observation
-7. `proxy_health`, `proxy_shield_check` — Proxy engine health checks
-8. `rd_strategies` — List deep research strategies
-9. `skills_detect` — Detect project technologies
-10. `auto_index` — Git-aware project indexing (idempotent via manifest)
+4. `neural_observe` — Submit baseline SONA observation
+5. `proxy_health`, `proxy_shield_check` — Proxy engine health checks
+6. `skills_detect` — Detect project technologies
+7. `auto_index` — Git-aware project indexing (idempotent via manifest)
 
 ### Init Flags
 
@@ -352,7 +299,7 @@ The warmup orchestrator runs the following 10 steps (each independent — failur
 | `--skip-skills` | Skip interactive skills setup |
 | `--skip-verify` | Skip Phase 4 verification probes (faster init, no MCP calls) |
 | `--skip-index` | Skip Phase 3 auto-indexing |
-| `--skip-team` | Skip Phase 3 team/swarm initialization |
+| `--skip-team` | Skip Phase 3 team setup hook |
 | `--skip-proxy` | Skip Phase 3 proxy health checks |
 | `--tool` / `-t` | Tools to configure: claude, gemini, opencode, all |
 
@@ -362,14 +309,10 @@ State is stored in `.aiyoucli/` in the project root:
 
 ```
 .aiyoucli/
-  agents/store.json       # Agent registry
-  swarm/state.json        # Swarm state
-  tasks/store.json        # Task queue
-  sessions/*.json         # Session files
   helpers/statusline.cjs  # Standalone statusline script
   config.json             # Project config (optional)
   q-table.json            # Q-Learning persistence (auto-saved)
-  vectors.redb            # Vector memory database (HNSW 384-dim)
+  vectors.redb            # Vector memory database (HNSW 8-dim, keyword embeddings)
   index-manifest.json     # Auto-indexer manifest (commit + chunk counts)
   metrics/                # Metrics snapshots
   skills/                 # TOON-distilled skill files
@@ -379,14 +322,15 @@ State is stored in `.aiyoucli/` in the project root:
 
 | Priority | Feature | Notes |
 |----------|---------|-------|
-| High | Deep research module (aiyoucli-rd) | Orchestration, web search, document processing, knowledge graph |
+| High | Deep research module (aiyoucli-rd) | Finish internal implementation before exposing — see `plans/aiyoucli-deferred-work.md` |
+| High | Claude Code integration for `@aiyou-dev/team` | Mirror the OpenCode plugin flow for Claude Code |
 | High | npm packaging + GitHub Actions CI | Cross-platform NAPI builds for 5 targets |
 | High | `update` command | Self-update mechanism |
 | Done | AST analyzer (regex + language-specific parsers) | Multi-language function/class/import extraction |
 | Done | Semantic router (keyword + embedding hybrid) | 8 agent profiles with gateway embedding hybrid |
-| Done | HNSW index in memory tools | HNSW enabled by default (open + in-memory) |
+| Done | HNSW 8-dim keyword embeddings | Default for auto-indexed vectors |
 | Done | Q-table persistence to disk | Auto-save to .aiyoucli/q-table.json |
-| Done | ONNX embedding server | Local all-MiniLM-L6-v2 on port 8001 |
+| Done | ONNX embedding server | Local all-MiniLM-L6-v2 on port 8001 (opt-in) |
 | Done | Consolidated proxy into aiyoucli-napi | Single NAPI binary — LLM gateway, cache, shield, firewall, AST, semantic |
 | Low | Plugin system | Deferred |
 | Low | IPFS pattern sharing | Deferred |

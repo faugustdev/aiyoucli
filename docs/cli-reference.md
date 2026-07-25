@@ -1,6 +1,6 @@
 # CLI Reference
 
-[Home](../README.md) | [Getting Started](getting-started.md) | **CLI Reference** | [MCP Tools](mcp-tools.md) | [Architecture](architecture.md) | [Configuration](configuration.md) | [Local Models](local-models.md)
+[Home](../README.md) | [Getting Started](getting-started.md) | **CLI Reference** | [MCP Tools](mcp-tools.md) | [Architecture](architecture.md) | [Configuration](configuration.md)
 
 ---
 
@@ -24,7 +24,7 @@ aiyoucli init --skip-skills
 
 ### `aiyoucli status`
 
-System overview showing tool count, memory state, active agents, and configuration.
+System overview showing tool count, memory state, and configuration.
 
 ```bash
 aiyoucli status
@@ -45,7 +45,6 @@ Read a configuration value. Supports dot notation for nested keys. Omit the key 
 ```bash
 aiyoucli config get
 aiyoucli config get memory.dimensions
-aiyoucli config get swarm.topology
 ```
 
 ### `aiyoucli config set <key> <value>`
@@ -54,187 +53,18 @@ Set a configuration value and persist it to `.aiyoucli/config.json`.
 
 ```bash
 aiyoucli config set memory.dimensions 512
-aiyoucli config set swarm.topology mesh
 aiyoucli config set cli.verbosity debug
 ```
 
 ---
 
-## Agents and Orchestration
+## Agent Team
 
-### `aiyoucli agent spawn`
-
-Spawn a new AI agent with a given type and optional name.
-
-| Option | Description | Default |
-|---|---|---|
-| `--name <name>` | Agent name | Auto-generated from type |
-| `--model <tier>` | Model tier: `haiku`, `sonnet`, `opus` | Varies by type |
-| `--type <type>` | Agent type | `coder` |
-
-Agent types and their default models:
-
-| Type | Default Model |
-|---|---|
-| `coder` | sonnet |
-| `researcher` | sonnet |
-| `tester` | haiku |
-| `reviewer` | sonnet |
-| `architect` | opus |
-| `security` | opus |
-| `debugger` | sonnet |
-| `documenter` | haiku |
+Agent orchestration is owned by the `@aiyou-dev/team` OpenCode plugin and is not duplicated as `agent`, `swarm`, `task`, or `session` commands in aiyoucli.
 
 ```bash
-aiyoucli agent spawn --name worker --model sonnet
-aiyoucli agent spawn --type architect --name lead
-```
-
-### `aiyoucli agent list`
-
-List all active agents (excludes stopped agents) with their metrics.
-
-```bash
-aiyoucli agent list
-```
-
-### `aiyoucli agent status --id <id>`
-
-Get status and metrics for a specific agent.
-
-```bash
-aiyoucli agent status --id agent-m1abc-x2y3
-```
-
-### `aiyoucli agent stop --id <id>`
-
-Stop an agent by ID.
-
-```bash
-aiyoucli agent stop --id agent-m1abc-x2y3
-```
-
-### `aiyoucli agent record --id <id> --success`
-
-Record a task outcome for an agent. Updates metrics: success/fail count, duration, success rate.
-
-| Option | Description | Required |
-|---|---|---|
-| `--id <id>` | Agent ID | Yes |
-| `--success` | Whether the task succeeded (boolean) | Yes |
-| `--duration-ms <ms>` | Task duration in milliseconds | No |
-
-```bash
-aiyoucli agent record --id agent-m1abc-x2y3 --success
-aiyoucli agent record --id agent-m1abc-x2y3 --success false --duration-ms 4500
-```
-
-### `aiyoucli agent metrics`
-
-Get aggregated metrics across all active agents, grouped by type.
-
-```bash
-aiyoucli agent metrics
-```
-
-### `aiyoucli swarm init`
-
-Initialize a multi-agent swarm with a topology.
-
-| Option | Description | Default |
-|---|---|---|
-| `--topology <t>` | `hierarchical`, `mesh`, `ring`, `star`, `hybrid` | `hierarchical` |
-| `--max-agents <n>` | Maximum agents | `8` |
-| `--strategy <s>` | `specialized`, `balanced`, `adaptive` | `specialized` |
-
-```bash
-aiyoucli swarm init --topology mesh --max-agents 12
-aiyoucli swarm init --topology star --strategy adaptive
-```
-
-### `aiyoucli swarm status`
-
-Get current swarm status including topology, agent count, and state.
-
-```bash
-aiyoucli swarm status
-```
-
-### `aiyoucli swarm stop`
-
-Stop the active swarm.
-
-```bash
-aiyoucli swarm stop
-```
-
-### `aiyoucli task create`
-
-Create a new task with optional assignment and priority.
-
-| Option | Description | Default |
-|---|---|---|
-| `--description <d>` | Task description | Required |
-| `--priority <p>` | `low`, `normal`, `high`, `critical` | `normal` |
-| `--assign-to <id>` | Agent ID to assign | None |
-
-```bash
-aiyoucli task create --description "Refactor auth module" --priority high
-aiyoucli task create --description "Write unit tests" --assign-to agent-m1abc-x2y3
-```
-
-### `aiyoucli task list`
-
-List all tasks. Optionally filter by status.
-
-| Option | Description |
-|---|---|
-| `--status <s>` | Filter: `pending`, `in_progress`, `completed`, `failed` |
-
-```bash
-aiyoucli task list
-aiyoucli task list --status pending
-```
-
-### `aiyoucli task status --id <id>`
-
-Get task status by ID.
-
-```bash
-aiyoucli task status --id task-m1abc
-```
-
-### `aiyoucli task complete --id <id>`
-
-Mark a task as completed.
-
-```bash
-aiyoucli task complete --id task-m1abc
-```
-
-### `aiyoucli session start [--id <id>]`
-
-Start a new session or resume an existing one. If no ID is provided, one is auto-generated.
-
-```bash
-aiyoucli session start
-aiyoucli session start --id my-session
-```
-
-### `aiyoucli session end --id <id>`
-
-End an active session.
-
-```bash
-aiyoucli session end --id my-session
-```
-
-### `aiyoucli session list`
-
-List all sessions with their status and timestamps.
-
-```bash
-aiyoucli session list
+aiyoucli setup
+aiyoucli team doctor
 ```
 
 ### `aiyoucli route <description>`
@@ -482,7 +312,7 @@ aiyoucli gcc
 
 ### `aiyoucli statusline`
 
-Rich terminal status dashboard showing swarm state, agents, memory, git, and tasks.
+Rich terminal status dashboard showing git, vectors, sessions, and tools.
 
 | Option | Description | Default |
 |---|---|---|

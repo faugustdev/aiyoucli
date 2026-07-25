@@ -1,5 +1,7 @@
 # Ruflo V3 (@aiyou-dev/cli) vs aiyoucli — Comparativa Detallada
 
+> **Snapshot histórico.** Las filas de esta comparativa describen el estado de la migración inicial. Después se retiraron los módulos `agent`/`swarm`/`task`/`session`/`models`/`rd` de la superficie visible de aiyoucli; esas tablas no recogen esa eliminación. La fuente de verdad actual es `aiyoucli mcp tools` y `plans/aiyoucli-deferred-work.md`.
+
 Documento de referencia para entender que tiene cada CLI, que se porto, que falta, y que se descarto intencionalmente.
 
 ## Numeros

@@ -50,11 +50,11 @@ describe("renderWarmupReport", () => {
   it("renders a report with all status types", () => {
     const report: WarmupReport = {
       steps: [
-        { name: "memory_init", status: "ok", detail: "HNSW 384d initialized", duration_ms: 45 },
+        { name: "memory_init", status: "ok", detail: "HNSW 8d initialized (keyword embeddings)", duration_ms: 45 },
         { name: "graph_bootstrap", status: "ok", detail: "15 nodes, 8 edges", duration_ms: 120 },
         { name: "proxy_health", status: "degraded", detail: "Proxy unhealthy", duration_ms: 30 },
         { name: "auto_index", status: "failed", detail: "No git repository", duration_ms: 5 },
-        { name: "swarm_init", status: "skipped", detail: "Skipped via --skip-team", duration_ms: 0 },
+        { name: "skills_detect", status: "skipped", detail: "Skipped", duration_ms: 0 },
       ],
       total_duration_ms: 200,
       ok_count: 2,
@@ -67,7 +67,7 @@ describe("renderWarmupReport", () => {
 
     expect(output).toContain("Phase 3 — Warmup");
     expect(output).toContain("memory_init");
-    expect(output).toContain("HNSW 384d initialized");
+    expect(output).toContain("HNSW 8d initialized (keyword embeddings)");
     expect(output).toContain("45ms");
     expect(output).toContain("proxy_health");
     expect(output).toContain("Proxy unhealthy");
