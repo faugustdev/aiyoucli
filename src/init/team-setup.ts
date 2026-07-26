@@ -300,14 +300,17 @@ function runAiyouTeamInstall(options: TeamSetupOptions): SetupResult {
 
 function parseTeamsFromSetupOutput(output: string): string[] {
   const teams: string[] = [];
-  const teamPatterns = [/coding-team/, /general-team/, /wukong-team/];
 
-  for (const pattern of teamPatterns) {
-    if (pattern.test(output)) {
-      teams.push(pattern.source);
-    }
+  // Solo `coding-team` se distribuye en aiyou-team v0.1.x. Los otros
+  // nombres que existían en versiones tempranas (general-team,
+  // wukong-team) son placeholders no implementados y deben ignorarse
+  // para no reportar falsos positivos.
+  if (/coding-team/.test(output)) {
+    teams.push("coding-team");
   }
 
+  // Si el output dice "completed" pero no menciona explícitamente un
+  // team, asumimos coding-team (es el único que viene por defecto).
   if (teams.length === 0 && output.includes("completed")) {
     teams.push("coding-team");
   }
@@ -334,14 +337,16 @@ function validateInstallation(): { ok: boolean; reasons: string[] } {
     reasons.push("`aiyou-team` binary found but `version` command failed");
   }
 
-  // 2. Setup artifacts on disk
+  // 2. Setup artifacts on disk.
+  // Layout real del aiyou-team v0.1.x:
+  //   - Global OpenCode config: `~/.config/opencode/teams/<team>/agents/`
+  //   - Per-worktree: `<cwd>/.aiyou-team/`
+  // Las rutas anteriores (`agent-teams`, `aiyou-team.json`,
+  // `Library/Application Support`) no corresponden al layout actual
+  // y reportaban falsos negativos en `validateInstallation()`.
   const artifactPaths = [
-    // Linux/macOS global OpenCode config
-    `${process.env.HOME}/.config/opencode/agent-teams`,
-    `${process.env.HOME}/.config/opencode/aiyou-team.json`,
-    `${process.env.HOME}/.aiyou-team/teams`,
-    // macOS-specific
-    `${process.env.HOME}/Library/Application Support/opencode/agent-teams`,
+    `${process.env.HOME}/.config/opencode/teams`,
+    `${process.cwd()}/.aiyou-team`,
   ];
   const artifactFound = artifactPaths.some((p) => existsSync(p));
   if (!artifactFound) {
