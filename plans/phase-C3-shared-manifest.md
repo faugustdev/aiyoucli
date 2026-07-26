@@ -112,10 +112,16 @@ wrapper Rust produce ese JSON. Sin cambios en TS.
 
 ## Verificación realizada
 
-- `grep -rn "AGENT_PROFILES" /Users/august/Dev/personal/aiyou-dev_v1/aiyoucli/` — 0 hits.
-- `grep -rn "AGENT_TYPES" /Users/august/Dev/personal/aiyou-dev_v1/aiyouvector/` — 1 definición.
+- `grep -rn "AGENT_PROFILES" /Users/august/Dev/personal/aiyou-dev_v1/aiyoucli/` y
+  `/Users/august/Dev/personal/aiyou-dev_v1/aiyouvector/` — 0 hits (constante local
+  eliminada en C-1; nadie la recrea).
+- `grep -rn "AGENT_TYPES"` — 1 sola definición en
+  `/Users/august/Dev/personal/aiyou-dev_v1/aiyouvector/crates/aiyouvector-routing/src/heuristic.rs:4`.
+  Consumida por `semantic.rs`, `q_router.rs` y re-exportada via `lib.rs`.
 - `npm run build:rs`: ✅ exit 0.
-- `npm test`: ✅ 210/210 tests.
+- `npm test`: ✅ 210/210 tests, 18 archivos verde.
+- `cargo test -p aiyouvector-routing`: ✅ 31/31 (incluye 3 tests nuevos para
+  `model_tier_for` y la cobertura completa de `AGENT_TYPES`).
 
 ## Cambios realizados (resumen)
 

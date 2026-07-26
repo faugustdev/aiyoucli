@@ -121,10 +121,12 @@ function validateInstallation(): { ok: boolean; reasons: string[] } {
 ## Verificación realizada
 
 - `grep "agent-teams\|aiyou-team.json" src/init/team-setup.ts` — 0 hits.
-- `grep "general-team\|wukong-team" src/init/team-setup.ts` — 0 hits.
+- `grep "general-team\|wukong-team" src/init/team-setup.ts` — 0 hits
+  (los nombres de team solo aparecen en comentarios explicativos).
 - `grep "coding-team" src/init/team-setup.ts` — 2 hits (en el patrón
-  regex y en el fallback "completed → coding-team").
-- `npm test`: ✅ 210/210 tests, `__tests__/team-setup.test.ts` 4/4 verde.
+  regex de `parseTeamsFromSetupOutput` y en el fallback "completed → coding-team").
+- `npm test`: ✅ 210/210 tests, 18 archivos verde.
+- `__tests__/team-setup.test.ts`: 4/4 verde.
 
 ## Cambios realizados (resumen)
 

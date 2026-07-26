@@ -95,10 +95,15 @@ como comandos top-level. Confirmar.
 
 ## Verificación realizada
 
-- `ls src/mcp/tools/` — 19 archivos, ninguno de los 4 a eliminar.
+- `ls src/mcp/tools/` — 21 archivos (no 25 como en el review original; se eliminaron
+  4 archivos: `agent-tools.ts`, `swarm-tools.ts`, `task-tools.ts`, `session-tools.ts`),
+  ninguno de los 4 a eliminar presente.
 - `grep -rn "agent-tools\|swarm-tools\|task-tools\|session-tools" src/` — 0 hits.
 - `grep -rn "agent_spawn\|swarm_init\|task_create\|session_create" src/` — 0 hits.
-- `npm test`: ✅ 210/210 tests.
+- `npm test`: ✅ 210/210 tests, 18 archivos verde.
+- `__tests__/`: ningún test referencia los nombres de tools eliminados
+  (verificado en `mcp-tools-test.js`, `mcp-tools-test-v2.js`,
+  `graph-tools.test.ts`, `q-table-seed.test.ts`, etc.).
 
 ## Cambios realizados (resumen)
 

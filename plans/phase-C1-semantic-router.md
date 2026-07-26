@@ -105,7 +105,12 @@ de shape, se actualiza `src/napi/proxy.ts` en el mismo commit.
 
 - `npm run build:rs`: ✅ exit 0.
 - `npm test`: ✅ 210/210 tests, 18 archivos verde.
-- `wc -l semantic.rs`: de 414 → ~110 líneas.
+- `cargo test -p aiyoucli-napi`: ✅ 27/27 (incluye 7 tests nuevos del wrapper).
+- `cargo test -p aiyouvector-routing`: ✅ 31/31.
+- `wc -l semantic.rs`: de 414 → 309 líneas (incluye 7 tests nuevos; el cuerpo del wrapper son ~165 líneas de lógica).
+- `grep AGENT_PROFILES`: 0 hits (constante local eliminada).
+- `grep "AGENT_TYPES" en aiyouvector-routing`: 1 sola definición (`heuristic.rs:4`).
+- `grep "tree-sitter" en crates/aiyoucli-napi/src/`: 0 hits (deps de tree-sitter viven en aiyouvector-codebase).
 
 ## Cambios realizados (resumen)
 

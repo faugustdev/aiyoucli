@@ -89,7 +89,10 @@ function getProxyEngine() {
   - `ast-tools.ts:13` (función local `getEngine`)
   - **Cero llamadas a `mod.getProxyEngine`**.
 - `grep -rn "mod.getProxyEngine" src/` — **0 hits**.
-- `npm test`: ✅ 210/210 tests.
+- `npm test`: ✅ 210/210 tests, 18 archivos verde.
+- `__tests__/proxy-tools*.test.ts`: no existe (los tools no tienen test unit
+  dedicado; la cobertura viene de los tests de integración de `tools` y del
+  manual smoke).
 
 ## Hallazgos abiertos (no bloqueantes para Dec1)
 

@@ -128,12 +128,18 @@ la instalación porque es `optional`.
 ## Verificación realizada
 
 - `ls optional/models-local-stub/`:
-  - `package.json` — placeholder con `name: "@aiyou-dev/models-local-stub"`.
-  - `index.js` — exporta funciones que devuelven `{ available: false, reason: "..." }`.
-  - `README.md` — documenta el patrón.
-- `grep "@aiyou-dev/models-local" package.json` — 1 hit en `optionalDependencies`.
+  - `package.json` — 9 líneas, metadata del stub (no se llama `@aiyou-dev/models-local`
+    para evitar confusión con el paquete futuro).
+  - `index.js` — 64 líneas, exporta `launchLlamaServer`, `getVramTable`,
+    `getMinioConfig`, `runManager`, `listLocalModels`, `isAvailable`,
+    `isInstalled`. Todas devuelven `{ available: false, reason: "..." }`.
+  - `README.md` — 73 líneas, documenta el patrón de graceful degradation
+    y el plan de migración cuando se publique el paquete real.
+- `grep "@aiyou-dev/models-local" package.json` — 1 hit en `optionalDependencies`
+  con versión `0.0.1` (placeholder).
 - `npm install` — exit 0 (la dep opcional no se descarga pero no rompe).
-- `npm test`: ✅ 210/210 tests.
+- `npm test`: ✅ 210/210 tests, 18 archivos verde.
+- `grep -rn "src/models" src/`: 0 hits (no quedan referencias al antiguo path).
 
 ## Cambios realizados (resumen)
 

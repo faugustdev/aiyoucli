@@ -101,7 +101,13 @@ ajustar `src/napi/proxy.ts:AnalysisResult` en el mismo commit.
 
 - `npm run build:rs`: ✅ exit 0.
 - `npm test`: ✅ 210/210 tests, 18 archivos verde.
-- `wc -l ast.rs`: de 868 → ~250 líneas.
+- `cargo test -p aiyoucli-napi`: ✅ 27/27 (incluye 6 tests nuevos del wrapper).
+- `cargo test -p aiyouvector-routing`: ✅ 31/31.
+- `wc -l ast.rs`: de 868 → 831 líneas (más tests y soporte para 19 lenguajes;
+  el código de parsing en sí se redujo drásticamente al delegar a tree-sitter).
+- `grep "tree_sitter_rust\|tree_sitter_typescript" en crates/aiyoucli-napi/src/ast.rs`: 0 hits
+  (las deps tree-sitter-* viven ahora solo en aiyouvector-codebase).
+- Lenguajes soportados: 19 (antes 6).
 
 ## Cambios realizados (resumen)
 
