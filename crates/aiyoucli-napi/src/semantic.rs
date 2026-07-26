@@ -1,13 +1,37 @@
-//! Semantic Router — routes tasks to agent types using pattern matching
-//! and embedding-based similarity.
+//! Semantic Router — routes tasks to agent types via embedding similarity.
 //!
-//! Two modes:
-//! 1. Built-in keyword router (fast, no model needed)
-//! 2. Embedding-based router (uses ONNX model from models/)
+//! Thin wrapper over `aiyouvector_routing::semantic::SemanticRouter`. The
+//! keyword-based scoring that previously lived here (414 lines) was
+//! duplicate intelligence — aiyouvector-routing already ships an
+//! embedding-based router covering the same 8 agents (coder, researcher,
+//! tester, reviewer, architect, security, debugger, documenter).
+//!
+//! Pillar C (Pillar C — Cerrar la duplicación con aiyoucli) consolidates
+//! routing intelligence in aiyouvector-routing. This file is now a
+//! translation layer that maps the upstream `SemanticRouteResult` to the
+//! JSON shape expected by `proxy.rs` and the MCP tools that consume it
+//! via `src/napi/proxy.ts`.
+//!
+//! API surface preserved (consumed by `proxy.rs`):
+//!   - `SemanticRoute { route, confidence, method, scores, model_tier }`
+//!   - `RouteScore { route, score }`
+//!   - `RouterConfig { models_path, use_embeddings, min_confidence }`
+//!   - `SemanticRouter::new(config) -> Self`
+//!   - `SemanticRouter::route(task) -> SemanticRoute`
+//!   - `SemanticRouter::route_with_embeddings(task, scores) -> SemanticRoute`
+//!   - `SemanticRouter::embed(text) -> Vec<f64>`
+//!   - `SemanticRouter::stats() -> serde_json::Value`
+//!   - `SemanticRouter::agent_profiles() -> serde_json::Value`
 
-use serde::Serialize;
 use std::collections::HashMap;
 
+use serde::Serialize;
+use serde_json::json;
+
+use aiyouvector_routing::semantic::SemanticRouter as UpstreamRouter;
+use aiyouvector_routing::{keywords_for, model_tier_for, AGENT_TYPES};
+
+/// The JSON shape the proxy.rs NAPI binding expects.
 #[derive(Debug, Clone, Serialize)]
 pub struct SemanticRoute {
     pub route: String,
@@ -23,6 +47,9 @@ pub struct RouteScore {
     pub score: f64,
 }
 
+/// Configuration the proxy.rs constructor receives. Most fields are
+/// kept for API compatibility with the previous keyword-based router;
+/// only `min_confidence` has any meaningful effect on behavior today.
 #[derive(Debug, Clone, Serialize)]
 pub struct RouterConfig {
     pub models_path: Option<String>,
@@ -34,381 +61,249 @@ impl Default for RouterConfig {
     fn default() -> Self {
         Self {
             models_path: None,
-            use_embeddings: false,
+            use_embeddings: true,
             min_confidence: 0.15,
         }
     }
 }
 
-// ── Agent type definitions with weighted keywords ────────────────
-
-#[derive(Clone)]
-struct AgentProfile {
-    name: &'static str,
-    model_tier: &'static str,
-    keywords: &'static [(&'static str, f64)],
-    patterns: &'static [&'static str],
-}
-
-const AGENT_PROFILES: &[AgentProfile] = &[
-    AgentProfile {
-        name: "coder",
-        model_tier: "sonnet",
-        keywords: &[
-            ("implement", 0.9), ("code", 0.7), ("write", 0.5), ("create", 0.4),
-            ("function", 0.8), ("class", 0.7), ("api", 0.6), ("endpoint", 0.6),
-            ("feature", 0.6), ("module", 0.5), ("component", 0.5), ("middleware", 0.4),
-            ("algorithm", 0.5), ("data structure", 0.5), ("refactor", 0.7),
-            ("typescript", 0.5), ("javascript", 0.5), ("python", 0.5), ("rust", 0.5),
-            ("frontend", 0.5), ("backend", 0.6), ("full stack", 0.4),
-            ("authentication", 0.6), ("database", 0.5), ("schema", 0.5),
-            ("migration", 0.4), ("query", 0.5), ("graphql", 0.5), ("rest", 0.5),
-            ("controller", 0.5), ("service", 0.5), ("repository", 0.5),
-        ],
-        patterns: &[
-            "implement", "code", "develop", "build", "program", "write.*function",
-            "create.*api", "create.*endpoint", "add.*feature",
-        ],
-    },
-    AgentProfile {
-        name: "tester",
-        model_tier: "haiku",
-        keywords: &[
-            ("test", 0.9), ("spec", 0.8), ("assertion", 0.7), ("mock", 0.6),
-            ("stub", 0.5), ("fixture", 0.5), ("coverage", 0.6), ("unit test", 0.9),
-            ("integration test", 0.8), ("e2e", 0.7), ("end-to-end", 0.6),
-            ("testing", 0.8), ("jest", 0.6), ("vitest", 0.6), ("pytest", 0.6),
-            ("selenium", 0.5), ("cypress", 0.5), ("playwright", 0.5),
-            ("regression", 0.5), ("snapshot", 0.4), ("tdd", 0.6),
-        ],
-        patterns: &[
-            "write.*test", "unit test", "integration test", "e2e.*test",
-            "test.*coverage", "mock.*service", "test.*suite",
-        ],
-    },
-    AgentProfile {
-        name: "architect",
-        model_tier: "opus",
-        keywords: &[
-            ("architecture", 0.9), ("design", 0.7), ("system", 0.6),
-            ("microservice", 0.7), ("distributed", 0.7), ("scalable", 0.6),
-            ("high-level", 0.6), ("infrastructure", 0.5), ("deployment", 0.5),
-            ("pipeline", 0.5), ("ci/cd", 0.5), ("monolith", 0.4),
-            ("event-driven", 0.6), ("cqrs", 0.5), ("event sourcing", 0.5),
-            ("ddd", 0.6), ("domain", 0.5), ("bounded context", 0.5),
-            ("diagram", 0.4), ("flow", 0.4), ("decision", 0.5),
-            ("tech stack", 0.5), ("blueprint", 0.5), ("roadmap", 0.4),
-        ],
-        patterns: &[
-            "system design", "architecture decision", "high.*level design",
-            "distributed system", "microservice.*architecture",
-            "technical.*specification",
-        ],
-    },
-    AgentProfile {
-        name: "reviewer",
-        model_tier: "sonnet",
-        keywords: &[
-            ("review", 0.9), ("audit", 0.7), ("inspect", 0.5), ("check", 0.4),
-            ("quality", 0.5), ("lint", 0.5), ("style", 0.4), ("convention", 0.5),
-            ("best practice", 0.6), ("code review", 0.9), ("pull request", 0.7),
-            ("pr", 0.5), ("standards", 0.5), ("compliance", 0.5),
-            ("validate", 0.5), ("verify", 0.5),
-        ],
-        patterns: &[
-            "code review", "pull request review", "audit.*code",
-            "review.*pr", "check.*quality",
-        ],
-    },
-    AgentProfile {
-        name: "security",
-        model_tier: "sonnet",
-        keywords: &[
-            ("security", 0.9), ("vulnerability", 0.9), ("exploit", 0.7),
-            ("authentication", 0.6), ("authorization", 0.6), ("encryption", 0.7),
-            ("xss", 0.7), ("sql injection", 0.8), ("csrf", 0.7),
-            ("owasp", 0.7), ("penetration", 0.6), ("cve", 0.6),
-            ("firewall", 0.5), ("access control", 0.6), ("rbac", 0.5),
-            ("oauth", 0.5), ("jwt", 0.5), ("token", 0.4),
-            ("audit", 0.6), ("compliance", 0.5), ("gdpr", 0.5),
-            ("secure", 0.6), ("threat", 0.6), ("risk", 0.5),
-            ("malware", 0.6), ("ransomware", 0.5),
-        ],
-        patterns: &[
-            "security audit", "vulnerability.*scan", "penetration test",
-            "security review", "access control",
-        ],
-    },
-    AgentProfile {
-        name: "debugger",
-        model_tier: "sonnet",
-        keywords: &[
-            ("debug", 0.9), ("fix", 0.7), ("bug", 0.8), ("error", 0.6),
-            ("crash", 0.6), ("exception", 0.6), ("stack trace", 0.7),
-            ("issue", 0.5), ("problem", 0.5), ("broken", 0.5),
-            ("regression", 0.5), ("incident", 0.5), ("outage", 0.5),
-            ("log", 0.4), ("trace", 0.5), ("diagnose", 0.6),
-            ("troubleshoot", 0.5), ("reproduce", 0.5), ("fail", 0.5),
-            ("null", 0.4), ("undefined", 0.4), ("timeout", 0.4),
-        ],
-        patterns: &[
-            "fix.*bug", "debug.*issue", "resolve.*error",
-            "troubleshoot.*problem", "investigate.*crash",
-        ],
-    },
-    AgentProfile {
-        name: "documenter",
-        model_tier: "haiku",
-        keywords: &[
-            ("documentation", 0.9), ("readme", 0.7), ("doc", 0.7),
-            ("wiki", 0.5), ("guide", 0.5), ("tutorial", 0.5),
-            ("changelog", 0.5), ("api doc", 0.6), ("swagger", 0.6),
-            ("openapi", 0.6), ("comment", 0.4), ("annotate", 0.4),
-            ("explain", 0.5), ("describe", 0.4), ("example", 0.4),
-            ("usage", 0.4), ("setup", 0.4), ("how-to", 0.5),
-        ],
-        patterns: &[
-            "write.*documentation", "create.*readme", "api.*documentation",
-            "document.*code", "write.*guide",
-        ],
-    },
-    AgentProfile {
-        name: "researcher",
-        model_tier: "sonnet",
-        keywords: &[
-            ("research", 0.9), ("investigate", 0.6), ("explore", 0.5),
-            ("analyze", 0.6), ("study", 0.5), ("paper", 0.6),
-            ("article", 0.4), ("understand", 0.4), ("learn", 0.4),
-            ("comparison", 0.5), ("evaluate", 0.5), ("benchmark", 0.5),
-            ("survey", 0.5), ("literature", 0.5), ("state of the art", 0.5),
-            ("feasibility", 0.4), ("prototype", 0.4), ("poc", 0.4),
-        ],
-        patterns: &[
-            "research.*topic", "investigate.*technology", "compare.*solution",
-            "feasibility.*study", "literature.*review",
-        ],
-    },
-];
-
+/// Wraps `aiyouvector_routing::semantic::SemanticRouter` and adapts its
+/// `SemanticRouteResult` (route, similarity, scores) into the
+/// `SemanticRoute` shape that the proxy engine has historically returned.
 pub struct SemanticRouter {
     config: RouterConfig,
-    profiles: Vec<AgentProfile>,
+    inner: UpstreamRouter,
 }
 
 impl SemanticRouter {
     pub fn new(config: Option<RouterConfig>) -> Self {
         Self {
             config: config.unwrap_or_default(),
-            profiles: AGENT_PROFILES.to_vec(),
+            inner: UpstreamRouter::new(),
         }
     }
 
-    /// Route a task description to the best agent type.
+    /// Route a task to the best agent type using embedding similarity.
     pub fn route(&self, task: &str) -> SemanticRoute {
-        let lower = task.to_lowercase();
+        let result = self.inner.route(task);
 
-        // Score each agent profile
-        let mut scores: Vec<RouteScore> = self
-            .profiles
+        // Convert upstream `scores: Vec<(String, f32)>` to our shape.
+        let scores: Vec<RouteScore> = result
+            .scores
             .iter()
-            .map(|p| {
-                let keyword_score = Self::score_keywords(&lower, p.keywords);
-                let pattern_score = Self::score_patterns(&lower, p.patterns);
-                let total = keyword_score * 0.7 + pattern_score * 0.3;
-                RouteScore {
-                    route: p.name.to_string(),
-                    score: total,
-                }
+            .map(|(route, score)| RouteScore {
+                route: route.clone(),
+                score: *score as f64,
             })
             .collect();
 
-        // Sort by score descending
-        scores.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-
-        let best_score = scores.first().map(|s| s.score).unwrap_or(0.0);
-        let best_route = scores.first().map(|s| s.route.clone()).unwrap_or_else(|| "coder".to_string());
-
-        // Determine model tier based on complexity
-        let model_tier = if best_score > 0.6 {
-            // Find the profile that matched
-            self.profiles
-                .iter()
-                .find(|p| p.name == best_route)
-                .map(|p| p.model_tier)
-                .unwrap_or("sonnet")
-        } else if best_score > 0.3 {
-            "sonnet"
-        } else {
-            "haiku"
-        };
+        // Confidence maps to similarity for the embedding-based router.
+        let confidence = result.similarity as f64;
 
         SemanticRoute {
-            route: best_route,
-            confidence: best_score,
-            method: "keyword".to_string(),
+            route: result.route.clone(),
+            confidence,
+            method: "embedding".to_string(),
+            model_tier: model_tier_for(&result.route).to_string(),
             scores,
-            model_tier: model_tier.to_string(),
         }
     }
 
-    /// Route using external embedding scores (from ONNX model).
+    /// Route with hybrid scoring — combines the upstream embedding-based
+    /// result with user-provided embedding scores. The user's scores
+    /// receive 60% weight, the upstream router's scores 40%.
     pub fn route_with_embeddings(
         &self,
         task: &str,
         embedding_scores: HashMap<String, f64>,
     ) -> SemanticRoute {
-        let keyword_route = self.route(task);
+        // Start from the embedding-based route.
+        let base = self.route(task);
 
-        // Blend embedding scores with keyword scores
-        let blended: Vec<RouteScore> = keyword_route
+        // Blend per-agent scores.
+        let blended: Vec<RouteScore> = base
             .scores
             .iter()
             .map(|s| {
-                let embed_score = embedding_scores.get(&s.route).copied().unwrap_or(0.0);
+                let user_score = embedding_scores.get(&s.route).copied().unwrap_or(0.0);
                 RouteScore {
                     route: s.route.clone(),
-                    score: s.score * 0.4 + embed_score * 0.6,
+                    score: s.score * 0.4 + user_score * 0.6,
                 }
             })
             .collect();
 
-        let mut sorted = blended.clone();
-        sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-
-        let best = sorted.first().cloned().unwrap_or(RouteScore {
-            route: "coder".to_string(),
-            score: 0.5,
-        });
+        // Pick the highest blended score.
+        let best = blended
+            .iter()
+            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+            .cloned()
+            .unwrap_or(RouteScore {
+                route: "coder".to_string(),
+                score: 0.5,
+            });
 
         SemanticRoute {
-            route: best.route,
+            route: best.route.clone(),
             confidence: best.score,
             method: "hybrid".to_string(),
-            scores: sorted,
-            model_tier: keyword_route.model_tier,
+            scores: blended,
+            model_tier: model_tier_for(&best.route).to_string(),
         }
     }
 
-    /// Generate embedding for a text (uses pre-computed vectors or keyword fallback).
+    /// Generate embedding for a text — delegates to upstream router.
+    /// Returns `Vec<f64>` (converted from upstream `Vec<f32>`) for
+    /// backwards compatibility with the previous keyword-based router
+    /// that returned 8-dimensional `f64` vectors.
     pub fn embed(&self, text: &str) -> Vec<f64> {
-        // Simple keyword-based embedding: count occurrences of profile keywords
-        let lower = text.to_lowercase();
-        let mut vec = Vec::with_capacity(8);
-
-        for profile in &self.profiles {
-            let mut score = 0.0;
-            for (kw, weight) in profile.keywords {
-                if lower.contains(kw) {
-                    score += weight;
-                }
-            }
-            // Normalize by number of keywords
-            let normalized = if !profile.keywords.is_empty() {
-                score / profile.keywords.len() as f64
-            } else {
-                0.0
-            };
-            vec.push(normalized);
-        }
-
-        // L2 normalize
-        let norm: f64 = vec.iter().map(|v| v * v).sum::<f64>().sqrt();
-        if norm > 0.0 {
-            for v in &mut vec {
-                *v /= norm;
-            }
-        }
-
-        vec
+        self.inner
+            .embed(text)
+            .into_iter()
+            .map(|v| v as f64)
+            .collect()
     }
 
-    /// Get stats about the router configuration.
+    /// Stats about the router configuration. Returns JSON consumed by
+    /// `proxy.rs::semantic_stats()` and forwarded as-is to TS.
     pub fn stats(&self) -> serde_json::Value {
-        let total_keywords: usize = self.profiles.iter().map(|p| p.keywords.len()).sum();
-        serde_json::json!({
-            "num_agents": self.profiles.len(),
+        let total_keywords: usize = AGENT_TYPES
+            .iter()
+            .map(|name| keywords_for(name).len())
+            .sum();
+        json!({
+            "num_agents": AGENT_TYPES.len(),
             "total_keywords": total_keywords,
             "use_embeddings": self.config.use_embeddings,
             "min_confidence": self.config.min_confidence,
-            "agents": self.profiles.iter().map(|p| serde_json::json!({
-                "name": p.name,
-                "model_tier": p.model_tier,
-                "keywords": p.keywords.len(),
-                "patterns": p.patterns.len(),
-            })).collect::<Vec<_>>(),
+            "embedding_dimensions": self.inner.dimensions(),
+            "agents": AGENT_TYPES.iter().map(|name| {
+                let kws = keywords_for(name);
+                json!({
+                    "name": name,
+                    "model_tier": model_tier_for(name),
+                    "keywords": kws.len(),
+                    "patterns": 0,
+                })
+            }).collect::<Vec<_>>(),
         })
     }
 
     /// Return the full agent profile list as JSON.
     ///
-    /// Exposed to TypeScript via NAPI. Used by the q_table_seed MCP tool
-    /// to seed the Q-router with sensible initial values for each profile's
-    /// top keywords. Single source of truth: changing a profile's keywords
-    /// here automatically updates the seed.
+    /// Consumed by the `q_table_seed` MCP tool to seed the Q-router
+    /// with sensible initial values. The `keywords` array is derived
+    /// from the upstream `keywords_for()` (which tokenizes the route
+    /// description in aiyouvector-routing). The `patterns` array is
+    /// empty — pattern matching is no longer used; the upstream
+    /// router operates on embeddings.
     pub fn agent_profiles(&self) -> serde_json::Value {
-        let profiles: Vec<serde_json::Value> = self
-            .profiles
+        let profiles: Vec<serde_json::Value> = AGENT_TYPES
             .iter()
-            .map(|p| {
-                // Collect keywords as {text, weight} pairs and sort by weight
-                // descending so callers can pick the top-K without re-sorting.
-                let mut kw: Vec<(&'static str, f64)> = p.keywords.to_vec();
-                kw.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                let keywords: Vec<serde_json::Value> = kw
-                    .into_iter()
-                    .map(|(text, weight)| serde_json::json!({ "text": text, "weight": weight }))
+            .map(|name| {
+                let kws: Vec<serde_json::Value> = keywords_for(name)
+                    .iter()
+                    .map(|(text, weight)| json!({ "text": text, "weight": weight }))
                     .collect();
-                serde_json::json!({
-                    "name": p.name,
-                    "model_tier": p.model_tier,
-                    "keywords": keywords,
-                    "patterns": p.patterns,
+                json!({
+                    "name": name,
+                    "model_tier": model_tier_for(name),
+                    "keywords": kws,
+                    "patterns": [],
                 })
             })
             .collect();
-        serde_json::json!(profiles)
+        json!(profiles)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrapper_route_returns_embedding_method() {
+        let r = SemanticRouter::new(None);
+        let result = r.route("implement a login page with form validation");
+        assert_eq!(result.method, "embedding");
+        assert!(!result.scores.is_empty());
+        assert!(!result.model_tier.is_empty());
     }
 
-    // ── Scorers ─────────────────────────────────────────────────
-
-    fn score_keywords(text: &str, keywords: &[(&str, f64)]) -> f64 {
-        let mut total = 0.0;
-        let mut matched = 0.0;
-
-        for (kw, weight) in keywords {
-            if text.contains(kw) {
-                total += weight;
-                matched += 1.0;
-            }
-        }
-
-        if keywords.is_empty() {
-            return 0.0;
-        }
-
-        // Score: average of matched weights, boosted by coverage
-        let avg_weight = total / keywords.len() as f64;
-        let coverage = matched / keywords.len() as f64;
-
-        avg_weight * (1.0 + coverage * 0.5)
+    #[test]
+    fn wrapper_model_tier_matches_upstream() {
+        let r = SemanticRouter::new(None);
+        let result = r.route("design microservice architecture");
+        // architect → opus
+        assert_eq!(result.model_tier, "opus");
     }
 
-    fn score_patterns(text: &str, patterns: &[&str]) -> f64 {
-        let mut score = 0.0;
-        for pattern in patterns {
-            // Convert glob-like pattern to regex
-            let regex_str = pattern
-                .replace('.', "\\.")
-                .replace("*", ".*");
-            if let Ok(re) = regex::Regex::new(&format!("(?i){}", regex_str)) {
-                if re.is_match(text) {
-                    score += 1.0;
-                }
+    #[test]
+    fn wrapper_route_with_embeddings_blends() {
+        let r = SemanticRouter::new(None);
+        let mut user_scores = HashMap::new();
+        // Force the result to "tester" with a very high user score.
+        user_scores.insert("tester".to_string(), 1.0);
+        for name in AGENT_TYPES {
+            if name != &"tester" {
+                user_scores.insert(name.to_string(), 0.0);
             }
         }
-        if patterns.is_empty() {
-            return 0.0;
+        let result = r.route_with_embeddings("any task at all", user_scores);
+        assert_eq!(result.method, "hybrid");
+        // tester should win because user score is 1.0 and the upstream
+        // score is at most 1.0 (cosine similarity), so blended ≥ 0.6.
+        assert_eq!(result.route, "tester");
+    }
+
+    #[test]
+    fn wrapper_embed_returns_f64_vector() {
+        let r = SemanticRouter::new(None);
+        let vec = r.embed("test text");
+        assert!(!vec.is_empty());
+        // All values should be finite (embedding model loaded).
+        for v in &vec {
+            assert!(v.is_finite());
         }
-        score / patterns.len() as f64
+    }
+
+    #[test]
+    fn wrapper_stats_includes_all_agents() {
+        let r = SemanticRouter::new(None);
+        let stats = r.stats();
+        let agents = stats["agents"].as_array().expect("agents array");
+        assert_eq!(agents.len(), AGENT_TYPES.len());
+        for name in AGENT_TYPES {
+            let name_str = name.to_string();
+            assert!(agents.iter().any(|a| a["name"] == name_str.as_str()));
+        }
+    }
+
+    #[test]
+    fn wrapper_agent_profiles_shape() {
+        let r = SemanticRouter::new(None);
+        let profiles = r.agent_profiles();
+        let arr = profiles.as_array().expect("profiles array");
+        assert_eq!(arr.len(), AGENT_TYPES.len());
+        for p in arr {
+            assert!(p.get("name").is_some());
+            assert!(p.get("model_tier").is_some());
+            assert!(p["keywords"].is_array());
+            assert!(p["patterns"].is_array());
+        }
+    }
+
+    #[test]
+    fn wrapper_agent_profiles_keywords_nonempty() {
+        let r = SemanticRouter::new(None);
+        let profiles = r.agent_profiles();
+        let arr = profiles.as_array().expect("profiles array");
+        for p in arr {
+            // Every profile must have at least one keyword for q_table_seed
+            // to work. The upstream router derives keywords from the route
+            // description, so each profile has multiple tokens.
+            let keywords = p["keywords"].as_array().expect("keywords array");
+            assert!(!keywords.is_empty(), "profile {} has no keywords", p["name"]);
+        }
     }
 }
