@@ -130,6 +130,7 @@ const initCommand: Command = {
     { name: "skip-index", description: "Skip Phase 3 auto-indexing (faster init)", type: "boolean" },
     { name: "skip-team", description: "Skip Phase 3 team/swarm initialization", type: "boolean" },
     { name: "skip-proxy", description: "Skip Phase 3 proxy health checks", type: "boolean" },
+    { name: "skip-watcher", description: "Skip aiyouvector daemon watch hook (Phase 3.11)", type: "boolean" },
     { name: "tool", short: "t", description: "Tools to configure: claude, gemini, opencode, all (default: all)", type: "string" },
   ],
   examples: [
@@ -304,6 +305,7 @@ const initCommand: Command = {
     const skipIndex = ctx.flags.skipIndex as boolean;
     const skipTeam = ctx.flags.skipTeam as boolean;
     const skipProxy = ctx.flags.skipProxy as boolean;
+    const skipWatcher = ctx.flags.skipWatcher as boolean;
 
     // Warmup runs for opencode target or when no specific target is set
     if (!targets || targets.includes("opencode")) {
@@ -314,6 +316,7 @@ const initCommand: Command = {
           skipIndex,
           skipTeam,
           skipProxy,
+          skipWatcher,
         });
         renderWarmupReport(warmupReport);
       } catch (err) {

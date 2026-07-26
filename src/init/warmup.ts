@@ -16,6 +16,7 @@
 
 import { callTool } from "../mcp/client.js";
 import { autoIndex, type IndexResult } from "./indexer-auto.js";
+import { tryWatchProject } from "./aiyouvector-watcher.js";
 
 export interface WarmupStep {
   name: string;
@@ -39,6 +40,7 @@ export interface WarmupOptions {
   skipIndex?: boolean;
   skipTeam?: boolean;
   skipProxy?: boolean;
+  skipWatcher?: boolean;
   onProgress?: (step: string, status: string) => void;
 }
 
@@ -88,7 +90,7 @@ async function runStep(
 export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
   const startTime = Date.now();
   const steps: WarmupStep[] = [];
-  const { cwd, skipIndex, skipProxy, onProgress } = options;
+  const { cwd, skipIndex, skipProxy, skipWatcher, onProgress } = options;
   
   // 1. Vector memory initialization
   steps.push(
@@ -315,7 +317,37 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
       duration_ms: 0,
     });
   }
-  
+
+  // 11. aiyouvector daemon watch (Pillar A.4 — closes step 8 of lamp plan).
+  //     Best-effort: if `aiyouvector` is not installed, the step is a
+  //     no-op success. If installed but the daemon is down, the hook
+  //     attempts `daemon start` once and retries the watch.
+  if (skipWatcher) {
+    steps.push({
+      name: "aiyouvector_watch",
+      status: "skipped",
+      detail: "Skipped via --skip-watcher",
+      duration_ms: 0,
+    });
+  } else {
+    steps.push(
+      await runStep(
+        "aiyouvector_watch",
+        async () => {
+          const w = tryWatchProject(cwd);
+          if (!w.watcherInstalled) {
+            return { ok: true, detail: w.detail };
+          }
+          if (!w.ok) {
+            return { ok: false, detail: w.detail };
+          }
+          return { ok: true, detail: w.detail };
+        },
+        onProgress
+      )
+    );
+  }
+
   const total_duration_ms = Date.now() - startTime;
   
   return {

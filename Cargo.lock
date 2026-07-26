@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "aiyoucli-napi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aiyouvector-attention",
  "aiyouvector-core",
@@ -36,7 +36,7 @@ dependencies = [
 
 [[package]]
 name = "aiyoucli-rd"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "napi",
  "napi-build",
