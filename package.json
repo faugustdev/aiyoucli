@@ -37,7 +37,8 @@
     "@aiyou-dev/cli-darwin-x64": "0.1.0",
     "@aiyou-dev/cli-linux-arm64-gnu": "0.1.0",
     "@aiyou-dev/cli-linux-x64-gnu": "0.1.0",
-    "@aiyou-dev/cli-win32-x64-msvc": "0.1.0"
+    "@aiyou-dev/cli-win32-x64-msvc": "0.1.0",
+    "@aiyou-dev/models-local": "0.0.1"
   },
   "files": [
     "bin/**",

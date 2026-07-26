@@ -1,0 +1,8 @@
+{
+  "name": "models-local-stub",
+  "version": "0.0.1",
+  "description": "Placeholder stub for the future @aiyou-dev/models-local package. Defines the API surface that aiyoucli can call via `try { require('@aiyou-dev/models-local') } catch { return 'not installed' }`.",
+  "main": "index.js",
+  "private": true,
+  "type": "module"
+}
