@@ -13,12 +13,21 @@ use std::fmt::Write as FmtWrite;
 
 #[derive(Debug, Clone)]
 enum MdToken {
-    Heading { level: u8, text: String },
+    Heading {
+        level: u8,
+        text: String,
+    },
     Paragraph(String),
-    TableHeader { columns: Vec<String> },
+    TableHeader {
+        columns: Vec<String>,
+    },
     TableSeparator,
-    TableRow { cells: Vec<String> },
-    CodeBlockStart { lang: String },
+    TableRow {
+        cells: Vec<String>,
+    },
+    CodeBlockStart {
+        lang: String,
+    },
     CodeLine(String),
     CodeBlockEnd,
     ListItem {
@@ -64,7 +73,11 @@ fn lex_markdown(input: &str) -> Vec<MdToken> {
         // Heading
         if trimmed.starts_with('#') {
             let level = trimmed.chars().take_while(|&c| c == '#').count() as u8;
-            let text = trimmed[level as usize..].trim().trim_start_matches("—").trim().to_string();
+            let text = trimmed[level as usize..]
+                .trim()
+                .trim_start_matches("—")
+                .trim()
+                .to_string();
             tokens.push(MdToken::Heading { level, text });
             continue;
         }
@@ -266,14 +279,30 @@ fn to_key(heading: &str) -> String {
 // ── TOON Encoder ─────────────────────────────────────────────────
 
 fn needs_toon_quoting(s: &str) -> bool {
-    if s.is_empty() { return true; }
-    if s.starts_with(' ') || s.ends_with(' ') { return true; }
-    if matches!(s, "true" | "false" | "null") { return true; }
-    if s.parse::<f64>().is_ok() { return true; }
-    if s.contains(':') || s.contains('"') || s.contains('\\') { return true; }
-    if s.contains('[') || s.contains(']') || s.contains('{') || s.contains('}') { return true; }
-    if s.contains('\n') || s.contains('\r') || s.contains('\t') { return true; }
-    if s.starts_with("- ") || s == "-" { return true; }
+    if s.is_empty() {
+        return true;
+    }
+    if s.starts_with(' ') || s.ends_with(' ') {
+        return true;
+    }
+    if matches!(s, "true" | "false" | "null") {
+        return true;
+    }
+    if s.parse::<f64>().is_ok() {
+        return true;
+    }
+    if s.contains(':') || s.contains('"') || s.contains('\\') {
+        return true;
+    }
+    if s.contains('[') || s.contains(']') || s.contains('{') || s.contains('}') {
+        return true;
+    }
+    if s.contains('\n') || s.contains('\r') || s.contains('\t') {
+        return true;
+    }
+    if s.starts_with("- ") || s == "-" {
+        return true;
+    }
     false
 }
 
@@ -313,7 +342,11 @@ fn encode_section(out: &mut String, section: &Section, depth: usize) {
     // Section key as TOON key
     if depth == 0 && section.level == 1 {
         // Top-level title
-        let desc = section.descriptions.first().map(|s| s.as_str()).unwrap_or("");
+        let desc = section
+            .descriptions
+            .first()
+            .map(|s| s.as_str())
+            .unwrap_or("");
         if !desc.is_empty() {
             let _ = writeln!(out, "_title: {}", toon_escape(&section.key));
             let _ = writeln!(out, "desc: {}", toon_escape(desc));
@@ -331,7 +364,11 @@ fn encode_section(out: &mut String, section: &Section, depth: usize) {
             && section.children.is_empty()
         {
             // Simple key: value
-            let _ = writeln!(out, "{indent}{key}: {}", toon_escape(&section.descriptions[0]));
+            let _ = writeln!(
+                out,
+                "{indent}{key}: {}",
+                toon_escape(&section.descriptions[0])
+            );
             return;
         }
 
@@ -353,7 +390,9 @@ fn encode_section(out: &mut String, section: &Section, depth: usize) {
 
     // Descriptions — merge into single line
     if depth > 0 || section.level > 1 {
-        let merged: Vec<&str> = section.descriptions.iter()
+        let merged: Vec<&str> = section
+            .descriptions
+            .iter()
             .map(|s| s.as_str())
             .filter(|s| !s.is_empty())
             .collect();
@@ -384,23 +423,29 @@ fn encode_section(out: &mut String, section: &Section, depth: usize) {
 
     // Lists → inline arrays
     for list in &section.lists {
-        if list.is_empty() { continue; }
+        if list.is_empty() {
+            continue;
+        }
         encode_list(out, list, &child_indent);
     }
 
     // Children
-    let child_depth = if depth == 0 && section.level == 1 { 0 } else { depth + 1 };
+    let child_depth = if depth == 0 && section.level == 1 {
+        0
+    } else {
+        depth + 1
+    };
     for child in &section.children {
         encode_section(out, child, child_depth);
     }
 }
 
 fn encode_table(out: &mut String, table: &Table, indent: &str) {
-    if table.rows.is_empty() { return; }
+    if table.rows.is_empty() {
+        return;
+    }
 
-    let cols: Vec<String> = table.columns.iter()
-        .map(|c| to_key(c))
-        .collect();
+    let cols: Vec<String> = table.columns.iter().map(|c| to_key(c)).collect();
     let header = cols.join(",");
     let count = table.rows.len();
 
@@ -412,11 +457,15 @@ fn encode_table(out: &mut String, table: &Table, indent: &str) {
 }
 
 fn encode_code_block(out: &mut String, block: &CodeBlock, indent: &str) {
-    if block.lines.is_empty() { return; }
+    if block.lines.is_empty() {
+        return;
+    }
 
     // For bash/shell: extract commands as inline array
     if matches!(block.lang.as_str(), "bash" | "sh" | "shell" | "") {
-        let commands: Vec<&str> = block.lines.iter()
+        let commands: Vec<&str> = block
+            .lines
+            .iter()
             .map(|l| l.trim())
             .filter(|l| !l.is_empty())
             .collect();
@@ -468,8 +517,12 @@ fn encode_list(out: &mut String, items: &[String], indent: &str) {
 
 /// Detect file tree code blocks (mostly indented paths with / or .)
 fn is_file_tree(block: &CodeBlock) -> bool {
-    if block.lines.len() < 5 { return false; }
-    let path_lines = block.lines.iter()
+    if block.lines.len() < 5 {
+        return false;
+    }
+    let path_lines = block
+        .lines
+        .iter()
         .filter(|l| l.contains('/') || l.contains('.') || l.ends_with('/'))
         .count();
     path_lines as f32 / block.lines.len() as f32 > 0.5
@@ -477,10 +530,16 @@ fn is_file_tree(block: &CodeBlock) -> bool {
 
 /// Detect example output blocks (statusline output, ASCII art, etc.)
 fn is_example_output(block: &CodeBlock) -> bool {
-    if !block.lang.is_empty() { return false; } // Has a language tag = real code
-    if block.lines.len() < 3 { return false; }
+    if !block.lang.is_empty() {
+        return false;
+    } // Has a language tag = real code
+    if block.lines.len() < 3 {
+        return false;
+    }
     // Heuristic: if most lines contain | or special chars, it's output
-    let output_lines = block.lines.iter()
+    let output_lines = block
+        .lines
+        .iter()
         .filter(|l| l.contains('|') || l.contains('─') || l.contains('═'))
         .count();
     output_lines as f32 / block.lines.len() as f32 > 0.3
@@ -549,7 +608,8 @@ mod tests {
 
     #[test]
     fn distill_simple() {
-        let md = "# My Project\n\nA simple project.\n\n## Build\n\n```bash\nnpm install\nnpm test\n```";
+        let md =
+            "# My Project\n\nA simple project.\n\n## Build\n\n```bash\nnpm install\nnpm test\n```";
         let toon = distill_markdown(md.to_string());
         assert!(toon.contains("_title:"));
         assert!(toon.contains("desc:"));
@@ -559,7 +619,8 @@ mod tests {
 
     #[test]
     fn distill_table() {
-        let md = "# Test\n\n## Data\n\n| Name | Value |\n|------|-------|\n| foo | 1 |\n| bar | 2 |";
+        let md =
+            "# Test\n\n## Data\n\n| Name | Value |\n|------|-------|\n| foo | 1 |\n| bar | 2 |";
         let toon = distill_markdown(md.to_string());
         eprintln!("TOON OUTPUT:\n{toon}");
         assert!(toon.contains("[2]{name,value}:"));

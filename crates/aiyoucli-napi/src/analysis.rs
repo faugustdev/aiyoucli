@@ -12,7 +12,11 @@ fn classify_by_path(path: &str) -> &'static str {
         "test"
     } else if lower.ends_with(".md") || lower.contains("readme") || lower.contains("doc") {
         "docs"
-    } else if lower.contains("config") || lower.contains("package.json") || lower.contains("tsconfig") || lower.contains(".env") {
+    } else if lower.contains("config")
+        || lower.contains("package.json")
+        || lower.contains("tsconfig")
+        || lower.contains(".env")
+    {
         "config"
     } else {
         ""
@@ -21,9 +25,17 @@ fn classify_by_path(path: &str) -> &'static str {
 
 fn classify_by_content(content: &str) -> &'static str {
     let lower = content.to_lowercase();
-    if lower.contains("fix") || lower.contains("bug") || lower.contains("error") || lower.contains("issue") {
+    if lower.contains("fix")
+        || lower.contains("bug")
+        || lower.contains("error")
+        || lower.contains("issue")
+    {
         "bugfix"
-    } else if lower.contains("feat") || lower.contains("add") || lower.contains("implement") || lower.contains("new") {
+    } else if lower.contains("feat")
+        || lower.contains("add")
+        || lower.contains("implement")
+        || lower.contains("new")
+    {
         "feature"
     } else {
         ""
@@ -84,7 +96,11 @@ impl AnalysisEngine {
 
                 // Risk factors
                 if f.additions + f.deletions > 200 {
-                    risk_factors.push(format!("Large change in {}: {} lines", f.path, f.additions + f.deletions));
+                    risk_factors.push(format!(
+                        "Large change in {}: {} lines",
+                        f.path,
+                        f.additions + f.deletions
+                    ));
                 }
                 if impact >= 3 {
                     risk_factors.push(format!("High-impact file: {}", f.path));
@@ -146,23 +162,47 @@ impl AnalysisEngine {
         let lower = message.to_lowercase();
 
         // Priority 1: conventional commit prefixes (exact match)
-        if lower.starts_with("fix") { return "bugfix".into(); }
-        if lower.starts_with("feat") { return "feature".into(); }
-        if lower.starts_with("refactor") { return "refactor".into(); }
-        if lower.starts_with("test") { return "test".into(); }
-        if lower.starts_with("doc") { return "docs".into(); }
-        if lower.starts_with("style") { return "style".into(); }
+        if lower.starts_with("fix") {
+            return "bugfix".into();
+        }
+        if lower.starts_with("feat") {
+            return "feature".into();
+        }
+        if lower.starts_with("refactor") {
+            return "refactor".into();
+        }
+        if lower.starts_with("test") {
+            return "test".into();
+        }
+        if lower.starts_with("doc") {
+            return "docs".into();
+        }
+        if lower.starts_with("style") {
+            return "style".into();
+        }
         if lower.starts_with("config") || lower.starts_with("ci") || lower.starts_with("build") {
             return "config".into();
         }
 
         // Priority 2: keyword matching
-        if lower.contains("bug") || lower.contains("patch") { return "bugfix".into(); }
-        if lower.contains("add") || lower.contains("implement") { return "feature".into(); }
-        if lower.contains("restructure") || lower.contains("cleanup") { return "refactor".into(); }
-        if lower.contains("spec") { return "test".into(); }
-        if lower.contains("readme") { return "docs".into(); }
-        if lower.contains("format") || lower.contains("lint") { return "style".into(); }
+        if lower.contains("bug") || lower.contains("patch") {
+            return "bugfix".into();
+        }
+        if lower.contains("add") || lower.contains("implement") {
+            return "feature".into();
+        }
+        if lower.contains("restructure") || lower.contains("cleanup") {
+            return "refactor".into();
+        }
+        if lower.contains("spec") {
+            return "test".into();
+        }
+        if lower.contains("readme") {
+            return "docs".into();
+        }
+        if lower.contains("format") || lower.contains("lint") {
+            return "style".into();
+        }
 
         "unknown".into()
     }

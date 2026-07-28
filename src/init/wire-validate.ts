@@ -17,7 +17,8 @@
  */
 
 import { existsSync, accessSync, constants, statSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
 export type WireStatus = "ok" | "degraded" | "in_development" | "failed";
@@ -97,14 +98,47 @@ function probeAiyouCliMcp(): WireProbe {
 }
 
 function probeNapiBinary(cwd: string): WireProbe {
-  // Mirror the candidate list in src/mcp/tools/discovery-tools.ts
+  // Mirror the candidate list in src/mcp/tools/discovery-tools.ts AND
+  // src/napi/index.ts (the actual loader). The loader tries:
+  //   1. <package-root>/aiyoucli-napi.<platform>.node  (dev/cargo output)
+  //   2. require("@aiyou-dev/cli-<platform>")          (npm optional dep)
+  // We mirror both. Without the package-root candidates, a global install
+  // (where the binary lives in the package's own node_modules/) is invisible
+  // to the probe when cwd is the user's project root.
+  const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+  const platformMap: Record<string, string> = {
+    darwin: "darwin-arm64",
+    linux: process.arch === "arm64" ? "linux-arm64-gnu" : "linux-x64-gnu",
+    win32: "win32-x64-msvc",
+  };
+  const platform = platformMap[process.platform] ?? "linux-x64-gnu";
   const candidates = [
+    // cwd-relative (legacy/dev when binary is dropped next to project)
     join(cwd, "aiyoucli-napi.darwin-arm64.node"),
     join(cwd, "aiyoucli-napi.darwin-x64.node"),
     join(cwd, "aiyoucli-napi.linux-x64-gnu.node"),
     join(cwd, "aiyoucli-napi.linux-arm64-gnu.node"),
     join(cwd, "aiyoucli-napi.win32-x64-msvc.node"),
     join(cwd, "aiyoucli-napi.node"),
+    // cwd's local node_modules (linked install via npm/pnpm/yarn)
+    join(cwd, "node_modules", "@aiyou-dev", "cli-darwin-arm64", "aiyoucli-napi.darwin-arm64.node"),
+    join(cwd, "node_modules", "@aiyou-dev", "cli-darwin-x64", "aiyoucli-napi.darwin-x64.node"),
+    join(cwd, "node_modules", "@aiyou-dev", "cli-linux-x64-gnu", "aiyoucli-napi.linux-x64-gnu.node"),
+    join(cwd, "node_modules", "@aiyou-dev", "cli-linux-arm64-gnu", "aiyoucli-napi.linux-arm64-gnu.node"),
+    join(cwd, "node_modules", "@aiyou-dev", "cli-win32-x64-msvc", "aiyoucli-napi.win32-x64-msvc.node"),
+    // package's own install (global install / npm-link from repo)
+    join(packageRoot, "aiyoucli-napi.darwin-arm64.node"),
+    join(packageRoot, "aiyoucli-napi.darwin-x64.node"),
+    join(packageRoot, "aiyoucli-napi.linux-x64-gnu.node"),
+    join(packageRoot, "aiyoucli-napi.linux-arm64-gnu.node"),
+    join(packageRoot, "aiyoucli-napi.win32-x64-msvc.node"),
+    join(packageRoot, `aiyoucli-napi.${platform}.node`),
+    // package's own node_modules (the npm optional dep)
+    join(packageRoot, "node_modules", "@aiyou-dev", "cli-darwin-arm64", "aiyoucli-napi.darwin-arm64.node"),
+    join(packageRoot, "node_modules", "@aiyou-dev", "cli-darwin-x64", "aiyoucli-napi.darwin-x64.node"),
+    join(packageRoot, "node_modules", "@aiyou-dev", "cli-linux-x64-gnu", "aiyoucli-napi.linux-x64-gnu.node"),
+    join(packageRoot, "node_modules", "@aiyou-dev", "cli-linux-arm64-gnu", "aiyoucli-napi.linux-arm64-gnu.node"),
+    join(packageRoot, "node_modules", "@aiyou-dev", "cli-win32-x64-msvc", "aiyoucli-napi.win32-x64-msvc.node"),
   ];
   for (const c of candidates) {
     if (existsSync(c)) {

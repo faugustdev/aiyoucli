@@ -294,11 +294,7 @@ fn extract_via_treesitter(
     complexity_fn: &dyn Fn(&str, &str) -> f64,
 ) -> (Vec<FunctionDecl>, Vec<ClassDecl>, Vec<ImportDecl>, f64) {
     // Pick the extension from the path (last "." segment, lowercased).
-    let ext = path
-        .rsplit('.')
-        .next()
-        .unwrap_or("")
-        .to_ascii_lowercase();
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
 
     if !has_grammar_for(&ext) {
         return (Vec::new(), Vec::new(), Vec::new(), 0.0);
@@ -652,10 +648,7 @@ fn count_lines(lines: &[&str], language: Language) -> (usize, usize) {
 
         if in_block_comment {
             comments += 1;
-            if trimmed.contains("*/")
-                || trimmed.contains("'''")
-                || trimmed.contains("\"\"\"")
-            {
+            if trimmed.contains("*/") || trimmed.contains("'''") || trimmed.contains("\"\"\"") {
                 in_block_comment = false;
             }
             continue;
@@ -689,15 +682,13 @@ fn count_lines(lines: &[&str], language: Language) -> (usize, usize) {
 
         if is_comment {
             comments += 1;
-            if (trimmed.starts_with("/*") || trimmed.starts_with("/**"))
-                && !trimmed.contains("*/")
+            if (trimmed.starts_with("/*") || trimmed.starts_with("/**")) && !trimmed.contains("*/")
             {
                 in_block_comment = true;
             }
             if language == Language::Python
                 && (trimmed.starts_with("\"\"\"") || trimmed.starts_with("'''"))
-                && (trimmed.matches("\"\"\"").count() < 2
-                    && trimmed.matches("'''").count() < 2)
+                && (trimmed.matches("\"\"\"").count() < 2 && trimmed.matches("'''").count() < 2)
             {
                 in_block_comment = true;
             }
@@ -789,7 +780,10 @@ fn main() {
         assert_eq!(r.language, "rust");
         assert!(r.functions.iter().any(|f| f.name == "greet"));
         assert!(r.functions.iter().any(|f| f.name == "main"));
-        assert!(r.functions.iter().any(|f| f.name == "greet" && f.has_doc_comment));
+        assert!(r
+            .functions
+            .iter()
+            .any(|f| f.name == "greet" && f.has_doc_comment));
     }
 
     #[test]

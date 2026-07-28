@@ -30,7 +30,10 @@ impl VectorHandle {
         };
 
         let db = VectorDB::open(config).map_err(|e| {
-            Error::new(Status::GenericFailure, format!("Failed to open VectorDB: {e}"))
+            Error::new(
+                Status::GenericFailure,
+                format!("Failed to open VectorDB: {e}"),
+            )
         })?;
 
         Ok(Self {
@@ -48,12 +51,19 @@ impl VectorHandle {
             dimensions: dims,
             metric: DistanceMetric::Cosine,
             storage_path: None,
-            hnsw: if use_hnsw { Some(HnswConfig::default()) } else { None },
+            hnsw: if use_hnsw {
+                Some(HnswConfig::default())
+            } else {
+                None
+            },
             quantization: QuantizationConfig::None,
         };
 
         let db = VectorDB::in_memory(config).map_err(|e| {
-            Error::new(Status::GenericFailure, format!("Failed to create in-memory DB: {e}"))
+            Error::new(
+                Status::GenericFailure,
+                format!("Failed to create in-memory DB: {e}"),
+            )
         })?;
 
         Ok(Self {
@@ -71,8 +81,8 @@ impl VectorHandle {
     ) -> Result<String> {
         let vector_f32: Vec<f32> = vector.iter().map(|&v| v as f32).collect();
 
-        let meta: Option<HashMap<String, serde_json::Value>> = metadata
-            .and_then(|v| serde_json::from_value(v).ok());
+        let meta: Option<HashMap<String, serde_json::Value>> =
+            metadata.and_then(|v| serde_json::from_value(v).ok());
 
         let entry = VectorEntry {
             id,

@@ -129,9 +129,9 @@ impl ProxyEngine {
     /// Check if the provider/gateway is reachable.
     #[napi]
     pub fn health_check(&self) -> serde_json::Value {
-        let result = self.runtime.block_on(async {
-            self.llm.lock().unwrap().health_check().await
-        });
+        let result = self
+            .runtime
+            .block_on(async { self.llm.lock().unwrap().health_check().await });
         match result {
             Ok(status) => serde_json::to_value(&status).unwrap_or_default(),
             Err(e) => json!({ "reachable": false, "error": e.to_string() }),
@@ -266,9 +266,9 @@ impl ProxyEngine {
         input_tokens: i32,
         output_tokens: i32,
     ) -> serde_json::Value {
-        let cost = self
-            .restrictions
-            .estimated_cost(&model, input_tokens as u32, output_tokens as u32);
+        let cost =
+            self.restrictions
+                .estimated_cost(&model, input_tokens as u32, output_tokens as u32);
         json!({
             "model": model,
             "input_tokens": input_tokens,
@@ -282,9 +282,9 @@ impl ProxyEngine {
     /// Generate an embedding for a single text.
     #[napi]
     pub fn embed_text(&self, text: String) -> serde_json::Value {
-        let result = self.runtime.block_on(async {
-            self.embedder.lock().await.embed_one(text).await
-        });
+        let result = self
+            .runtime
+            .block_on(async { self.embedder.lock().await.embed_one(text).await });
         match result {
             Ok(embedding) => {
                 json!({ "embedding": embedding, "dimensions": embedding.len() })
@@ -296,9 +296,9 @@ impl ProxyEngine {
     /// Generate embeddings for multiple texts.
     #[napi]
     pub fn embed_texts(&self, texts: Vec<String>) -> serde_json::Value {
-        let result = self.runtime.block_on(async {
-            self.embedder.lock().await.embed(texts).await
-        });
+        let result = self
+            .runtime
+            .block_on(async { self.embedder.lock().await.embed(texts).await });
         match result {
             Ok(embeddings) => {
                 let dims: Vec<usize> = embeddings.iter().map(|e| e.len()).collect();
@@ -358,14 +358,15 @@ impl ProxyEngine {
             .as_object()
             .map(|obj| {
                 obj.iter()
-                    .filter_map(|(k, v)| {
-                        v.as_f64().map(|score| (k.clone(), score))
-                    })
+                    .filter_map(|(k, v)| v.as_f64().map(|score| (k.clone(), score)))
                     .collect()
             })
             .unwrap_or_default();
 
-        let result = self.semantic_router.keyword.route_with_embeddings(&task, scores);
+        let result = self
+            .semantic_router
+            .keyword
+            .route_with_embeddings(&task, scores);
         serde_json::to_value(&result).unwrap_or_default()
     }
 
@@ -373,16 +374,26 @@ impl ProxyEngine {
     #[napi]
     pub fn semantic_route_enhanced(&self, task: String) -> serde_json::Value {
         let embedding = self.semantic_router.keyword.embed(&task);
-        let agents = ["coder", "tester", "architect", "reviewer", "security", "debugger", "documenter", "researcher"];
+        let agents = [
+            "coder",
+            "tester",
+            "architect",
+            "reviewer",
+            "security",
+            "debugger",
+            "documenter",
+            "researcher",
+        ];
         let embedding_scores: HashMap<String, f64> = agents
             .iter()
             .enumerate()
-            .filter_map(|(i, name)| {
-                embedding.get(i).map(|&score| (name.to_string(), score))
-            })
+            .filter_map(|(i, name)| embedding.get(i).map(|&score| (name.to_string(), score)))
             .collect();
 
-        let result = self.semantic_router.keyword.route_with_embeddings(&task, embedding_scores);
+        let result = self
+            .semantic_router
+            .keyword
+            .route_with_embeddings(&task, embedding_scores);
         serde_json::to_value(&result).unwrap_or_default()
     }
 

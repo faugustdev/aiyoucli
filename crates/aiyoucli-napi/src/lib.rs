@@ -2,8 +2,8 @@
 extern crate napi_derive;
 
 mod analysis;
-mod attention;
 mod ast;
+mod attention;
 mod cache;
 mod compressor;
 mod detector;

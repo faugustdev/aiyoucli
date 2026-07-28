@@ -1,5 +1,4 @@
 /// Request/response compressor — reduces token usage via smart pruning.
-
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -28,7 +27,10 @@ impl Compressor {
         let tail_len = max_chars - head_len - 3; // 3 for "..."
 
         let head: String = text.chars().take(head_len).collect();
-        let tail: String = text.chars().skip(text.len().saturating_sub(tail_len)).collect();
+        let tail: String = text
+            .chars()
+            .skip(text.len().saturating_sub(tail_len))
+            .collect();
 
         format!("{}...{}", head, tail)
     }
@@ -70,10 +72,7 @@ impl Compressor {
         max_messages: usize,
         max_message_chars: usize,
     ) -> CompressionResult {
-        let original_tokens: usize = messages
-            .iter()
-            .map(|m| estimate_tokens(&m.content))
-            .sum();
+        let original_tokens: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
 
         let compressed: Vec<crate::llm::ChatMessage> = if messages.len() > max_messages {
             // Keep system prompt (first), then last N-1 messages
@@ -107,10 +106,7 @@ impl Compressor {
             })
             .collect();
 
-        let compressed_tokens: usize = compressed
-            .iter()
-            .map(|m| estimate_tokens(&m.content))
-            .sum();
+        let compressed_tokens: usize = compressed.iter().map(|m| estimate_tokens(&m.content)).sum();
 
         let ratio = if original_tokens > 0 {
             compressed_tokens as f64 / original_tokens as f64

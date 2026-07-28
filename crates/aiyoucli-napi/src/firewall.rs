@@ -1,8 +1,7 @@
+use serde::Serialize;
 /// Firewall — access control, rate limiting, origin validation.
-
 use std::collections::HashMap;
 use std::time::Instant;
-use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FirewallRule {

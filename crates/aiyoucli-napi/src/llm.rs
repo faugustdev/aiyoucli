@@ -81,7 +81,10 @@ impl LlmProvider {
             req = req.header("Authorization", auth_header);
         }
 
-        let resp = req.send().await.map_err(|e| LlmError::HttpError(e.to_string()))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| LlmError::HttpError(e.to_string()))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -121,7 +124,10 @@ impl LlmProvider {
             req = req.header("Authorization", format!("Bearer {}", key));
         }
 
-        let resp = req.send().await.map_err(|e| LlmError::HttpError(e.to_string()))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| LlmError::HttpError(e.to_string()))?;
 
         if !resp.status().is_success() {
             let status = resp.status();

@@ -163,7 +163,13 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
         if (text.includes("already exists")) {
           return { ok: true, detail: "Already seeded" };
         }
-        
+        // Guard: profiles may be empty (e.g. NAPI binding missing). In that
+        // case q_table_seed returns a plain-text diagnostic, not JSON. Don't
+        // crash the whole warmup — surface the diagnostic as a degraded step.
+        if (!text.trim().startsWith("{")) {
+          return { ok: false, detail: text.substring(0, 120) };
+        }
+
         const data = JSON.parse(text);
         return {
           ok: true,

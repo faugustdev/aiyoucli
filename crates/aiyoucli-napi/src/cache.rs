@@ -1,5 +1,4 @@
 /// Response cache with TTL — caches LLM responses keyed by (model, messages hash).
-
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

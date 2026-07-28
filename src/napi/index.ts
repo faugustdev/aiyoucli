@@ -8,7 +8,7 @@
 import { createRequire } from "node:module";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -349,17 +349,77 @@ export interface AgentProfile {
 /**
  * Return the full agent profile list from the semantic router.
  * Returns an empty array if the NAPI binding is unavailable.
+ *
+ * Fallback: when the Rust crate hasn't shipped `semanticAgentProfiles` yet
+ * (Pillar G — observer→sona→profile end-to-end), parse the agent roster from
+ * `.aiyoucli/agents.dsi.toon` so the Q-table seed step still has the 8
+ * canonical profiles to work with. This keeps the warmup green even when
+ * the binary is one Rust release ahead of the wrapper.
  */
 export function getAgentProfiles(): AgentProfile[] {
   const engine = loadProxyEngineIfAvailable() as {
     semanticAgentProfiles?: () => AgentProfile[];
   } | null;
-  if (!engine || typeof engine.semanticAgentProfiles !== "function") {
-    return [];
+  if (engine && typeof engine.semanticAgentProfiles === "function") {
+    try {
+      const profiles = engine.semanticAgentProfiles();
+      if (profiles.length > 0) return profiles;
+    } catch {
+      // fall through to TOON fallback
+    }
   }
+  return loadAgentProfilesFromToon();
+}
+
+function loadAgentProfilesFromToon(): AgentProfile[] {
+  const toonPath = join(process.cwd(), ".aiyoucli", "agents.dsi.toon");
+  if (!existsSync(toonPath)) return [];
   try {
-    return engine.semanticAgentProfiles();
+    const raw = readFileSync(toonPath, "utf-8");
+    // TOON row format for the agent roster:
+    //   coding-leader,Execution-first orchestrator,flagship,Complex multi-file tasks; context owner
+    // Four CSV columns: agent, role, tier, when_to_use.
+    const profiles: AgentProfile[] = [];
+    const seen = new Set<string>();
+    for (const line of raw.split(/\r?\n/)) {
+      const m = line.match(/^\s*([a-z][\w-]*),\s*([^,]+),\s*([^,]+),\s*(.+?)\s*$/);
+      if (!m) continue;
+      const name = m[1];
+      // Skip obvious non-agent rows (they have spaces in the first column).
+      if (name.includes(" ") || seen.has(name)) continue;
+      // The first column must be a short identifier (no commas, no spaces).
+      if (name.length > 32) continue;
+      seen.add(name);
+      const role = m[2];
+      const tier = m[3];
+      const whenToUse = m[4];
+      profiles.push({
+        name,
+        model_tier: tier,
+        // Synthesize keywords from the role + when_to_use. The Rust engine
+        // does the same internally; this is "good enough" for seeding Q-table
+        // entries during warmup — the actual routing still goes through the
+        // engine's own embeddings when available.
+        keywords: tokenizeKeywords(role + " " + whenToUse).map((text) => ({ text, weight: 0.5 })),
+        patterns: [],
+      });
+    }
+    return profiles;
   } catch {
     return [];
+  }
+}
+
+function tokenizeKeywords(text: string): string[] {
+  const stop = new Set(["a", "an", "the", "for", "and", "or", "of", "to", "in", "on", "with"]);
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .split(/[^a-z0-9-]+/)
+        .filter((w) => w.length >= 3 && !stop.has(w)),
+    ),
+  ).slice(0, 6);
+}
   }
 }

@@ -34,17 +34,37 @@ impl RoutingEngine {
             let sem = self.semantic.route(&task_description);
             (sem.route, sem.similarity, "semantic")
         } else {
-            (q_result.route.clone(), q_result.confidence, if q_result.explored { "explore" } else { "q-learning" })
+            (
+                q_result.route.clone(),
+                q_result.confidence,
+                if q_result.explored {
+                    "explore"
+                } else {
+                    "q-learning"
+                },
+            )
         };
 
-        let model_tier = self.q_router.select_tier(&task_description).as_str().to_string();
+        let model_tier = self
+            .q_router
+            .select_tier(&task_description)
+            .as_str()
+            .to_string();
 
         // Semantic scores as alternatives when Q-table is empty
         let alternatives = if q_result.alternatives.is_empty() {
             let sem = self.semantic.route(&task_description);
-            sem.scores.iter().take(3).map(|(r, s)| json!({"route": r, "score": s})).collect::<Vec<_>>()
+            sem.scores
+                .iter()
+                .take(3)
+                .map(|(r, s)| json!({"route": r, "score": s}))
+                .collect::<Vec<_>>()
         } else {
-            q_result.alternatives.iter().map(|a| json!({"route": a.route, "score": a.score})).collect()
+            q_result
+                .alternatives
+                .iter()
+                .map(|a| json!({"route": a.route, "score": a.score}))
+                .collect()
         };
 
         json!({
@@ -59,19 +79,18 @@ impl RoutingEngine {
 
     /// Record reward for a routing decision.
     #[napi]
-    pub fn record_reward(
-        &self,
-        task_description: String,
-        chosen_route: String,
-        reward: f64,
-    ) {
-        self.q_router.record_reward(&task_description, &chosen_route, reward as f32);
+    pub fn record_reward(&self, task_description: String, chosen_route: String, reward: f64) {
+        self.q_router
+            .record_reward(&task_description, &chosen_route, reward as f32);
     }
 
     /// Select model tier based on task complexity.
     #[napi]
     pub fn select_model_tier(&self, task_description: String) -> String {
-        self.q_router.select_tier(&task_description).as_str().to_string()
+        self.q_router
+            .select_tier(&task_description)
+            .as_str()
+            .to_string()
     }
 
     /// Route using only semantic similarity (bypasses Q-learning).
@@ -88,7 +107,11 @@ impl RoutingEngine {
     /// Embed text into a vector (useful for vector memory integration).
     #[napi]
     pub fn embed(&self, text: String) -> Vec<f64> {
-        self.semantic.embed(&text).into_iter().map(|v| v as f64).collect()
+        self.semantic
+            .embed(&text)
+            .into_iter()
+            .map(|v| v as f64)
+            .collect()
     }
 
     /// Get routing statistics.

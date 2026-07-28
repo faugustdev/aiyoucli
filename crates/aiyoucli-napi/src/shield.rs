@@ -16,9 +16,16 @@ const SENSITIVE_PATTERNS: &[&str] = &[
 ];
 
 const BLOCKED_KEYWORDS: &[&str] = &[
-    "hack", "crack", "exploit", "vulnerability",
-    "malware", "ransomware", "keylogger",
-    "sql injection", "xss attack", "csrf",
+    "hack",
+    "crack",
+    "exploit",
+    "vulnerability",
+    "malware",
+    "ransomware",
+    "keylogger",
+    "sql injection",
+    "xss attack",
+    "csrf",
 ];
 
 #[derive(Debug, Clone)]

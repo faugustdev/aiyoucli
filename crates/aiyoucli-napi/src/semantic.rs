@@ -136,7 +136,11 @@ impl SemanticRouter {
         // Pick the highest blended score.
         let best = blended
             .iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.score
+                    .partial_cmp(&b.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .cloned()
             .unwrap_or(RouteScore {
                 route: "coder".to_string(),
@@ -303,7 +307,11 @@ mod tests {
             // to work. The upstream router derives keywords from the route
             // description, so each profile has multiple tokens.
             let keywords = p["keywords"].as_array().expect("keywords array");
-            assert!(!keywords.is_empty(), "profile {} has no keywords", p["name"]);
+            assert!(
+                !keywords.is_empty(),
+                "profile {} has no keywords",
+                p["name"]
+            );
         }
     }
 }

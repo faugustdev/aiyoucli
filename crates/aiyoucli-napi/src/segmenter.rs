@@ -1,5 +1,4 @@
 /// Text segmenter — splits text into chunks for processing.
-
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,5 +1,4 @@
 /// Provider restrictions — model availability, token limits, rate limits per provider.
-
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -150,16 +149,17 @@ impl Restrictions {
 
     pub fn list_models(&self, provider: Option<&str>) -> Vec<&ModelInfo> {
         match provider {
-            Some(p) => self
-                .models
-                .values()
-                .filter(|m| m.provider == p)
-                .collect(),
+            Some(p) => self.models.values().filter(|m| m.provider == p).collect(),
             None => self.models.values().collect(),
         }
     }
 
-    pub fn estimated_cost(&self, model: &str, input_tokens: u32, output_tokens: u32) -> Option<f64> {
+    pub fn estimated_cost(
+        &self,
+        model: &str,
+        input_tokens: u32,
+        output_tokens: u32,
+    ) -> Option<f64> {
         self.models.get(model).map(|m| {
             (input_tokens as f64 / 1000.0 * m.cost_per_1k_input)
                 + (output_tokens as f64 / 1000.0 * m.cost_per_1k_output)
