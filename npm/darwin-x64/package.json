@@ -1,6 +1,6 @@
 {
   "name": "@aiyou-dev/cli-darwin-x64",
-  "version": "0.1.1",
+  "version": "1.3.0",
   "description": "aiyoucli native binding for macOS x64",
   "os": [
     "darwin"
