@@ -421,5 +421,3 @@ function tokenizeKeywords(text: string): string[] {
     ),
   ).slice(0, 6);
 }
-  }
-}
