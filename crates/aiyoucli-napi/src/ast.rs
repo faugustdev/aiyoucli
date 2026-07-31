@@ -113,6 +113,7 @@ impl Language {
         }
     }
 
+    #[allow(dead_code)]
     pub fn extensions(&self) -> &[&str] {
         match self {
             Language::JavaScript => &["js", "jsx", "mjs", "cjs"],
