@@ -142,4 +142,12 @@ impl RoutingEngine {
             self.q_router.import_q_table(snapshot);
         }
     }
+
+    /// Set the PRNG seed for routing decisions. Tests use this to make
+    /// exploration deterministic; production code should leave the default
+    /// (time-based) seed alone.
+    #[napi]
+    pub fn set_seed(&self, seed: u32) {
+        aiyouvector_routing::set_seed(seed);
+    }
 }

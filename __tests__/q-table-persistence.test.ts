@@ -40,7 +40,10 @@ describe("Q-table persistence (NAPI)", () => {
   });
 
   it("routes consistently after import", () => {
+    // Use a fixed seed so exploration is deterministic — without it the
+    // thread-local PRNG seeds from subsec_nanos() and the test is flaky.
     const r1 = createRoutingEngine();
+    r1.setSeed(0x5eed);
     // Train heavily on one route
     for (let i = 0; i < 50; i++) {
       r1.route("write unit tests for auth");
@@ -50,6 +53,7 @@ describe("Q-table persistence (NAPI)", () => {
     const exported = r1.exportQTable();
 
     const r2 = createRoutingEngine();
+    r2.setSeed(0x5eed);
     r2.importQTable(exported);
 
     // Fresh engine starts with high epsilon (exploration).

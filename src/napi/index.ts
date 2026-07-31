@@ -243,6 +243,7 @@ export interface RoutingEngine {
   };
   exportQTable(): string;
   importQTable(jsonStr: string): void;
+  setSeed(seed: number): void;
 }
 
 export function createRoutingEngine(): RoutingEngine {
