@@ -193,13 +193,17 @@ jobs:
 
   publish:
     name: Publish to npm
-    # Only run on tag pushes, and don't require build/test/rust-test to all
-    # succeed — matrix cross-compile targets (Darwin) sometimes fail on
-    # openssl-sys even when the host builds succeed. The publish step only
-    # ships artifacts that are actually present, so a partial matrix still
-    # publishes what we have.
-    if: startsWith(github.ref, 'refs/tags/v') && (always() && needs.validate-version.result == 'success')
-    needs: [validate-version]
+    # Only run on tag pushes. We must wait for the build matrix to finish
+    # uploading artifacts (otherwise the download-artifact step finds 0
+    # because uploads haven't happened yet). The matrix cross-compile targets
+    # (Darwin x64, Linux ARM64) sometimes fail on openssl-sys even when the
+    # host builds succeed — `needs.build.result` may be `failure` rather than
+    # `success`. We use `always() && needs.build.result != 'cancelled'` so
+    # we tolerate partial matrix failures but still wait for the matrix to
+    # finish. The publish step only ships artifacts that are actually
+    # present, so a partial matrix still publishes what we have.
+    if: startsWith(github.ref, 'refs/tags/v') && always() && needs.validate-version.result == 'success' && needs.build.result != 'cancelled'
+    needs: [validate-version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
