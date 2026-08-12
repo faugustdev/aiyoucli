@@ -49,16 +49,18 @@ export interface WarmupOptions {
  */
 async function runStep(
   name: string,
-  fn: () => Promise<{ ok: boolean; detail: string }>,
+  fn: () => Promise<{ ok: boolean; detail: string; status?: WarmupStep["status"] }>,
   onProgress?: (step: string, status: string) => void
 ): Promise<WarmupStep> {
   const startTime = Date.now();
   onProgress?.(name, "running");
-  
+
   try {
     const result = await fn();
     const duration_ms = Date.now() - startTime;
-    const status = result.ok ? "ok" : "degraded";
+    // A step may name its own status — used for optional services, where
+    // "not running" is an expected state rather than a degradation.
+    const status = result.status ?? (result.ok ? "ok" : "degraded");
     onProgress?.(name, status);
     
     return {
@@ -79,6 +81,19 @@ async function runStep(
       duration_ms,
     };
   }
+}
+
+/**
+ * Pull the endpoint out of the proxy's error string so the report names the
+ * URL it tried. A probe that only says "unhealthy" gives the reader nothing
+ * to act on.
+ */
+function describeGatewayTarget(error: unknown): string {
+  if (typeof error === "string") {
+    const match = error.match(/https?:\/\/[^\s)]+/);
+    if (match) return match[0];
+  }
+  return "see DEFAULT_GATEWAY_URL";
 }
 
 /**
@@ -249,9 +264,22 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
           // Proxy might return text instead of JSON in some states
           try {
             const data = JSON.parse(text);
+            // The tool reports `reachable`; this used to read `healthy`,
+            // which the payload never contains — so the step said
+            // "Proxy unhealthy" even when the gateway was up.
+            if (data.reachable) {
+              const latency = typeof data.latency_ms === "number" ? ` ${data.latency_ms}ms` : "";
+              return { ok: true, detail: `Proxy reachable (${data.provider ?? "unknown"})${latency}` };
+            }
+
+            // Not reachable is the normal case: the gateway is a local
+            // service the user starts on demand, like the embed server on
+            // :8001. Report it as an optional service rather than a
+            // degradation, and say which endpoint was tried.
             return {
-              ok: data.healthy ?? false,
-              detail: data.healthy ? "Proxy healthy" : "Proxy unhealthy",
+              ok: true,
+              status: "skipped",
+              detail: `optional local gateway not running — ${describeGatewayTarget(data.error)}`,
             };
           } catch {
             // Text response - treat as degraded if it mentions "not" or "unavailable"

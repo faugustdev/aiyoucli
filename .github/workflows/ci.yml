@@ -181,15 +181,43 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Tag must match package.json version
+      # The version lives in 7 hand-edited places. This step used to check only
+      # the root package.json, so the platform packages could drift and get
+      # published under the wrong version without anyone noticing.
+      - name: Tag must match every manifest version
         run: |
           TAG="${GITHUB_REF#refs/tags/v}"
-          PKG="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag v$TAG does not match package.json version $PKG"
+          failed=0
+
+          check() {
+            if [ "$2" != "$TAG" ]; then
+              echo "::error::$1 is at version $2, expected $TAG"
+              failed=1
+            else
+              echo "ok  $1 = $2"
+            fi
+          }
+
+          check "package.json" "$(node -p "require('./package.json').version")"
+
+          for dir in npm/*/; do
+            check "$dir/package.json" "$(node -p "require('./$dir/package.json').version")"
+          done
+
+          # The root package pins its platform packages exactly, so those
+          # ranges have to move with the release too.
+          for pkg in darwin-arm64 darwin-x64 linux-x64-gnu linux-arm64-gnu win32-x64-msvc; do
+            check "optionalDependencies[@aiyou-dev/cli-$pkg]" \
+              "$(node -p "require('./package.json').optionalDependencies['@aiyou-dev/cli-$pkg']")"
+          done
+
+          check "Cargo.toml" "$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')"
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::Version mismatch — refusing to release"
             exit 1
           fi
-          echo "Tag v$TAG matches package.json version $PKG"
+          echo "All manifests agree on $TAG"
 
   publish:
     name: Publish to npm

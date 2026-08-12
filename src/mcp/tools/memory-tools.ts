@@ -122,7 +122,8 @@ export const memoryTools: MCPTool[] = [
 
   {
     name: "memory_search",
-    description: "Search for similar vectors using HNSW index",
+    description:
+      "Search for similar vectors using HNSW index. Each result carries `distance` (cosine distance: lower is closer, 0.0 is identical); results are sorted ascending, nearest first.",
     inputSchema: {
       type: "object",
       properties: {

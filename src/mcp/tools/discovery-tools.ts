@@ -5,6 +5,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { isNapiAvailable } from "../../napi/index.js";
+import { packageVersion } from "../../version.js";
 import { loadConfig } from "./memory-tools.js";
 
 const require = createRequire(import.meta.url);
@@ -153,12 +154,7 @@ export const discoveryTools: MCPTool[] = [
       const team = detectAiyouTeam();
       const embed = detectEmbedServer();
 
-      const pkgPath = join(__dirname, "..", "..", "..", "package.json");
-      let version = "unknown";
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-        version = pkg.version ?? "unknown";
-      } catch {}
+      const version = packageVersion();
 
       return json({
         server: {
@@ -204,12 +200,7 @@ export const discoveryTools: MCPTool[] = [
       const napi = detectNapi();
       const team = detectAiyouTeam();
 
-      const pkgPath = join(__dirname, "..", "..", "..", "package.json");
-      let cliVersion = "unknown";
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-        cliVersion = pkg.version ?? "unknown";
-      } catch {}
+      const cliVersion = packageVersion();
 
       return json({
         aiyoucli: cliVersion,

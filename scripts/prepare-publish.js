@@ -9,11 +9,12 @@
  *
  * Copies each .node file into the matching npm/{platform}/ directory.
  *
- * Matrix tolerance: the build matrix cross-compile targets (darwin-x64,
- * linux-arm64) sometimes fail on openssl-sys. We tolerate a partial matrix
- * publishing — for each platform that has artifacts, we copy and prepare
- * for publish. We only fail if zero artifacts were found, which means the
- * wait timing for artifact upload is broken.
+ * All five platforms are required. This script used to tolerate a partial
+ * matrix — the cross-compile targets failed on openssl-sys, and publishing
+ * "whatever we have" shipped @aiyou-dev/cli@1.3.1 referencing two platform
+ * packages that were never published, leaving Intel macOS and ARM Linux
+ * users with no native binary. The openssl-sys dependency is gone; a missing
+ * artifact now means something is genuinely wrong, so fail loudly.
  */
 
 import { readdirSync, copyFileSync, existsSync } from "node:fs";
@@ -68,10 +69,13 @@ if (copied === 0) {
 }
 
 if (missing.length > 0) {
-  console.warn(
-    `\nPartial matrix: ${missing.length} platform(s) missing — ` +
-      `(${missing.join(", ")}). These will be skipped by the publish step.`,
+  console.error(
+    `\n✖ Incomplete matrix: ${missing.length} platform(s) missing ` +
+      `(${missing.join(", ")}).\n` +
+      "  Publishing now would ship a root package pointing at platform " +
+      "packages that do not exist. Refusing to continue.",
   );
+  process.exit(1);
 }
 
-console.log(`\nReady to publish: ${copied} platform binaries.`);
+console.log(`\nReady to publish: ${copied} platform binaries (all 5 present).`);

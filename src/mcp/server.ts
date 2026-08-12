@@ -9,6 +9,7 @@ import { createInterface } from "node:readline";
 import { registry } from "./client.js";
 import { registerAllTools } from "./tools/index.js";
 import type { JsonRpcRequest, JsonRpcResponse } from "./types.js";
+import { packageVersion } from "../version.js";
 
 function send(response: JsonRpcResponse): void {
   process.stdout.write(JSON.stringify(response) + "\n");
@@ -51,7 +52,7 @@ async function handleRequest(request: JsonRpcRequest): Promise<void> {
           capabilities: { tools: {} },
           serverInfo: {
             name: "aiyoucli",
-            version: "1.0.2",
+            version: packageVersion(),
             description: "AI agent CLI with Rust-backed vector intelligence (aiyouvector NAPI + aiyou-team integration)",
             integrations: ["aiyouvector", "aiyou-team"],
           },

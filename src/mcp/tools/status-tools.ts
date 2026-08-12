@@ -2,6 +2,7 @@ import type { MCPTool, MCPToolResult } from "../../types.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { renderStatusline } from "../../statusline/generator.js";
+import { packageVersion } from "../../version.js";
 
 function json(d: unknown): MCPToolResult {
   return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
@@ -16,7 +17,7 @@ function getStatus(): MCPToolResult {
   const hasConfig = existsSync(join(cwd, ".aiyoucli", "config.json"));
 
   return json({
-    version: "1.0.2",
+    version: packageVersion(),
     cwd,
     node: process.version,
     platform: process.platform,

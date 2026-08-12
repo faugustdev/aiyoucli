@@ -36,16 +36,20 @@ describe("VectorDB (NAPI)", () => {
     expect(ids).toContain("vec-near-x");
   });
 
-  it("returns scores ordered by similarity", () => {
+  it("returns results ordered by ascending distance", () => {
     const db = inMemoryVectorDB(3);
     db.insert([1.0, 0.0, 0.0], "exact");
     db.insert([0.5, 0.5, 0.0], "partial");
     db.insert([0.0, 0.0, 1.0], "orthogonal");
 
     const results = db.search([1.0, 0.0, 0.0], 3);
-    // Lower score = closer (cosine distance)
+    // `distance` is cosine distance: lower is closer, nearest first.
     expect(results[0].id).toBe("exact");
-    expect(results[0].score).toBeLessThan(results[1].score);
+    expect(results[0].distance).toBeLessThan(results[1].distance);
+    // The whole list must be non-decreasing, not just the first pair.
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i].distance).toBeGreaterThanOrEqual(results[i - 1].distance);
+    }
   });
 
   it("deletes a vector", () => {

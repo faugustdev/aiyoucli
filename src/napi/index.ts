@@ -54,7 +54,11 @@ export interface VectorHandle {
 
 export interface SearchResult {
   id: string;
-  score: number;
+  /**
+   * Distance under the collection's metric — **lower is closer**. For cosine
+   * this is `1.0 - cosine_similarity`. Results come back sorted ascending.
+   */
+  distance: number;
   vector?: number[];
   metadata?: Record<string, unknown>;
 }
