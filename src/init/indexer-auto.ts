@@ -25,6 +25,10 @@ export interface IndexResult {
   commit?: string;
   file_count?: number;
   chunk_count?: number;
+  /** Chunks that could not be embedded or stored. */
+  failed_count?: number;
+  /** Dominant reason chunks failed, when any did. */
+  failure_reason?: string;
   duration_ms?: number;
 }
 
@@ -258,26 +262,44 @@ export async function autoIndex(
   }
   
   // Embed and store chunks
-  const stored = await embedAndStoreChunks(chunks, onProgress);
-  
+  const outcome = await embedAndStoreChunks(chunks, onProgress);
+  const duration_ms = Date.now() - startTime;
+
+  // Nothing landed: do NOT write a manifest. Recording the commit here would
+  // make the next run report "Index up to date" and never retry, which is how
+  // a broken embedder turned into a permanently empty index.
+  if (outcome.stored === 0) {
+    return {
+      indexed: false,
+      reason: outcome.failureReason
+        ? `No chunks stored — ${outcome.failureReason}`
+        : "No chunks stored",
+      commit,
+      file_count: files.length,
+      chunk_count: 0,
+      failed_count: outcome.failed,
+      duration_ms,
+    };
+  }
+
   // Write new manifest
   const newManifest: IndexManifest = {
     commit,
     timestamp: Date.now(),
     file_count: files.length,
-    chunk_count: stored,
+    chunk_count: outcome.stored,
   };
-  
+
   writeManifest(cwd, newManifest);
-  
-  const duration_ms = Date.now() - startTime;
-  
+
   return {
     indexed: true,
     reason: manifest ? "Commit changed" : "Initial index",
     commit,
     file_count: files.length,
-    chunk_count: stored,
+    chunk_count: outcome.stored,
+    failed_count: outcome.failed,
+    failure_reason: outcome.failureReason,
     duration_ms,
   };
 }

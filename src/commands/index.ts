@@ -307,26 +307,29 @@ const initCommand: Command = {
     const skipProxy = ctx.flags.skipProxy as boolean;
     const skipWatcher = ctx.flags.skipWatcher as boolean;
 
-    // Warmup runs for opencode target or when no specific target is set
-    if (!targets || targets.includes("opencode")) {
-      try {
-        ensureTools();
-        warmupReport = await warmup({
-          cwd,
-          skipIndex,
-          skipTeam,
-          skipProxy,
-          skipWatcher,
-        });
-        renderWarmupReport(warmupReport);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        output.warn(`Phase 3 (warmup) crashed: ${msg}`);
-      }
+    // Warmup runs for every target. Vector memory, the knowledge graph, the
+    // Q-table and project indexing are tool-agnostic — gating them on
+    // `opencode` meant a Claude Code user got an uninitialized memory and a
+    // "Run `aiyoucli init` to initialize" hint that could never come true.
+    try {
+      ensureTools();
+      warmupReport = await warmup({
+        cwd,
+        skipIndex,
+        skipTeam,
+        skipProxy,
+        skipWatcher,
+      });
+      renderWarmupReport(warmupReport);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      output.warn(`Phase 3 (warmup) crashed: ${msg}`);
     }
 
     // 4. Interactive skills setup (if terminal is interactive)
-    if (!ctx.flags["skip-skills"] && ctx.interactive) {
+    // parser.ts camelCases every flag, so the kebab-case key this used to
+    // read never matched and --skip-skills was silently ignored.
+    if (!ctx.flags.skipSkills && ctx.interactive) {
       try {
         const skillPaths = await interactiveInit(cwd);
         for (const p of skillPaths) {
@@ -528,17 +531,45 @@ const memoryCommand: Command = {
     },
     {
       name: "search",
-      description: "Search similar vectors",
+      description: "Search similar vectors by text query, or by a raw vector",
       options: [
-        { name: "vector", description: "Comma-separated query vector", type: "string", required: true },
+        { name: "vector", description: "Comma-separated query vector (skips embedding)", type: "string" },
         { name: "k", short: "k", description: "Number of results (default: 5)", type: "number" },
       ],
       action: async (ctx) => {
         ensureTools();
-        const raw = (ctx.flags.vector as string) || ctx.args[0];
-        if (!raw) { output.error("Query vector required: --vector '1.0,2.0,3.0'"); return; }
-        const cleaned = String(raw).replace(/[\[\]\s]/g, "");
-        const vector = cleaned.split(",").map(Number);
+        const rawVector = ctx.flags.vector as string | undefined;
+        const query = ctx.args[0];
+
+        let vector: number[];
+        if (rawVector) {
+          const cleaned = String(rawVector).replace(/[\[\]\s]/g, "");
+          vector = cleaned.split(",").map(Number);
+          if (vector.some(Number.isNaN)) {
+            output.error("--vector must be numeric, e.g. --vector '1.0,2.0,3.0'");
+            return;
+          }
+        } else if (query) {
+          // The indexer stores keyword embeddings, so a text query has to go
+          // through the same embedder to be comparable. Previously this path
+          // split the text on commas and produced [NaN], which the store
+          // rejected as a 1-dimensional vector.
+          const embedded = await callTool("embed", { type: "keyword", text: query });
+          if (embedded.isError) {
+            output.error(`Could not embed query: ${embedded.content[0]?.text ?? "unknown error"}`);
+            return;
+          }
+          try {
+            vector = JSON.parse(embedded.content[0]?.text ?? "");
+          } catch {
+            output.error("Embedder returned an unexpected payload");
+            return;
+          }
+        } else {
+          output.error("Query required: `aiyoucli memory search \"some text\"` or --vector '1.0,2.0'");
+          return;
+        }
+
         const result = await callTool("memory_search", {
           vector,
           k: ctx.flags.k || 5,

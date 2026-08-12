@@ -82,8 +82,29 @@ async function runStep(
 }
 
 /**
+ * Ask the keyword embedder how wide its vectors are.
+ *
+ * Goes through the same `embed` tool the indexer uses, so a broken embedder
+ * surfaces here — at collection-creation time — instead of silently producing
+ * a collection that every later insert fails to match.
+ *
+ * @returns The embedding width, or null if the embedder is unusable.
+ */
+async function probeEmbedderDimensions(): Promise<number | null> {
+  const result = await callTool("embed", { type: "keyword", text: "probe" });
+  if (result.isError) return null;
+  try {
+    const vector = JSON.parse(result.content[0]?.text ?? "");
+    if (Array.isArray(vector) && vector.length > 0) return vector.length;
+  } catch {
+    // non-JSON payload — treat as unusable
+  }
+  return null;
+}
+
+/**
  * Orchestrate the full warmup sequence.
- * 
+ *
  * @param options - Warmup configuration
  * @returns Detailed report of all steps
  */
@@ -97,17 +118,28 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
     await runStep(
       "memory_init",
       async () => {
-        // 8 dimensions, not 384: auto_index (step 10 below) embeds chunks
-        // with the "keyword" embedder (indexer-embed.ts), which is
-        // 8-dimensional and has no external dependencies. The 384-dim
-        // "onnx" embedder requires a separately-started local ONNX server
-        // (see AGENTS.md) that `init` does not launch, so defaulting this
-        // collection to 384 made every auto-indexed chunk fail memory-tools'
-        // dimension check. Re-run `memory init --dimensions 384` manually
-        // if you want to store real ONNX embeddings here instead.
+        // The collection must match whatever the "keyword" embedder actually
+        // produces, because auto_index (step 10 below) stores its output here.
+        // Do not hardcode: this was 384, then 8 (from a stale "8-dimension"
+        // doc comment in the Rust crate), while the embedder really returns
+        // 128 — every indexed chunk failed memory-tools' dimension check.
+        // Probe the embedder once and let it define the collection instead.
+        //
+        // The 384-dim "onnx" embedder needs a separately-started local ONNX
+        // server (see AGENTS.md) that `init` does not launch; run
+        // `memory init --dimensions 384` manually to use it.
+        const dimensions = await probeEmbedderDimensions();
+        if (dimensions === null) {
+          return {
+            ok: false,
+            detail:
+              "could not probe the keyword embedder — cannot size the vector collection",
+          };
+        }
+
         const result = await callTool("memory_init", {
           path: ".aiyoucli/vectors.redb",
-          dimensions: 8,
+          dimensions,
           enable_hnsw: true,
         });
 
@@ -115,7 +147,7 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
           return { ok: false, detail: result.content[0]?.text ?? "Unknown error" };
         }
 
-        return { ok: true, detail: "HNSW 8d initialized (keyword embeddings)" };
+        return { ok: true, detail: `HNSW ${dimensions}d initialized (keyword embeddings)` };
       },
       onProgress
     )
@@ -304,12 +336,20 @@ export async function warmup(options: WarmupOptions): Promise<WarmupReport> {
           });
           
           if (!indexResult.indexed) {
-            return { ok: true, detail: indexResult.reason };
+            // "Not a git repository" / "Index up to date" are fine; a run that
+            // scanned chunks and stored none is a real failure and must not be
+            // reported as ok.
+            const isFailure = indexResult.reason.startsWith("No chunks stored");
+            return { ok: !isFailure, detail: indexResult.reason };
           }
-          
+
+          const partial =
+            indexResult.failed_count && indexResult.failure_reason
+              ? ` (${indexResult.failed_count} failed — ${indexResult.failure_reason})`
+              : "";
           return {
             ok: true,
-            detail: `Indexed ${indexResult.file_count} files, ${indexResult.chunk_count} chunks in ${indexResult.duration_ms}ms`,
+            detail: `Indexed ${indexResult.file_count} files, ${indexResult.chunk_count} chunks in ${indexResult.duration_ms}ms${partial}`,
           };
         },
         onProgress

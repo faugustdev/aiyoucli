@@ -12,6 +12,7 @@
  */
 
 import { output, color } from "../output.js";
+import { loadConfig } from "../mcp/tools/memory-tools.js";
 import type { WireReport } from "./wire-validate.js";
 
 export type VerifyStatus = "ok" | "degraded" | "in_development" | "failed";
@@ -161,11 +162,24 @@ async function probeMemory(c: ToolCaller): Promise<VerifyRow> {
   // Output format: "Vectors: 1247" or similar
   const match = r.text.match(/(\d+)/);
   const count = match ? parseInt(match[1] ?? "0", 10) : 0;
+  // Read the width from the collection itself — this line used to hardcode
+  // "8d" while the store was created at a different size.
+  let dims: number | null = null;
+  try {
+    dims = loadConfig().dimensions;
+  } catch {
+    // config unreadable — omit the width rather than assert a wrong one
+  }
+
   return {
     name: "Memory",
     status: count > 0 ? "ok" : "degraded",
-    detail: count > 0 ? `HNSW 8d · ${count} vectors` : "empty (Phase 3 will init)",
-    suggestion: count > 0 ? undefined : "Run `aiyoucli init` to initialize.",
+    detail: count > 0
+      ? `HNSW${dims ? ` ${dims}d` : ""} · ${count} vectors`
+      : "empty (indexing stored nothing)",
+    suggestion: count > 0
+      ? undefined
+      : "Check the auto_index step above for the reason.",
   };
 }
 

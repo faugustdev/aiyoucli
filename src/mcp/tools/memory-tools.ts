@@ -12,13 +12,13 @@ const AIYOUCLI_DIR = join(process.cwd(), ".aiyoucli");
 const CONFIG_PATH = join(AIYOUCLI_DIR, "memory-config.json");
 const DEFAULT_VECTORS_PATH = join(AIYOUCLI_DIR, "vectors.redb");
 
-interface MemoryConfig {
+export interface MemoryConfig {
   path: string | null;
   dimensions: number;
   hnsw: boolean;
 }
 
-function loadConfig(): MemoryConfig {
+export function loadConfig(): MemoryConfig {
   if (existsSync(CONFIG_PATH)) {
     try {
       return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
@@ -34,7 +34,7 @@ function saveConfig(config: MemoryConfig): void {
 
 let db: VectorHandle | null = null;
 
-function getDB(): VectorHandle {
+export function getDB(): VectorHandle {
   if (!db) {
     const config = loadConfig();
     if (config.path) {

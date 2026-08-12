@@ -1,4 +1,15 @@
 import type { MCPTool, MCPToolResult } from "../../types.js";
+import {
+  createRoutingEngine,
+  createSonaEngine,
+  type RoutingEngine,
+  type SonaHandle,
+} from "../../napi/index.js";
+import { createProxyEngine, type ProxyEngineHandle } from "../../napi/proxy.js";
+import { getDB } from "./memory-tools.js";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 function json(d: unknown): MCPToolResult {
   return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
@@ -7,31 +18,15 @@ function text(t: string): MCPToolResult {
   return { content: [{ type: "text", text: t }] };
 }
 
-let memoryDb: any = null;
-function getMemoryDB() {
-  if (!memoryDb) {
-    const { inMemoryVectorDB } = require("../../napi/index.js");
-    memoryDb = inMemoryVectorDB(384, true);
-  }
-  return memoryDb;
-}
-
-let sonaHandle: any = null;
-function getSona() {
-  if (!sonaHandle) {
-    const { createSonaEngine } = require("../../napi/index.js");
-    sonaHandle = createSonaEngine();
-  }
+let sonaHandle: SonaHandle | null = null;
+function getSona(): SonaHandle {
+  if (!sonaHandle) sonaHandle = createSonaEngine();
   return sonaHandle;
 }
 
-let router: any = null;
-async function getRouter() {
+let router: RoutingEngine | null = null;
+async function getRouter(): Promise<RoutingEngine> {
   if (!router) {
-    const { createRoutingEngine } = require("../../napi/index.js");
-    const { existsSync } = require("node:fs");
-    const { readFile } = require("node:fs/promises");
-    const { join } = require("node:path");
     router = createRoutingEngine();
     const qPath = join(process.cwd(), ".aiyoucli", "q-table.json");
     if (existsSync(qPath)) {
@@ -41,11 +36,16 @@ async function getRouter() {
   return router;
 }
 
-function getProxyEngine(): any {
-  try {
-    const mod = require("../../napi/proxy.js");
-    return mod.createProxyEngine();
-  } catch { return null; }
+let proxyEngine: ProxyEngineHandle | null = null;
+function getProxyEngine(): ProxyEngineHandle | null {
+  if (!proxyEngine) {
+    try {
+      proxyEngine = createProxyEngine();
+    } catch {
+      return null;
+    }
+  }
+  return proxyEngine;
 }
 
 export const statsTools: MCPTool[] = [
@@ -67,7 +67,10 @@ export const statsTools: MCPTool[] = [
       const scope = (input.scope as string) || "full";
       const { metrics } = await import("../../metrics/collector.js");
       switch (scope) {
-        case "memory": return json(getMemoryDB().stats());
+        // The real persisted store from memory-tools, not a throwaway
+        // in-memory handle — otherwise `stats --scope memory` always
+        // reported an empty DB regardless of what was indexed.
+        case "memory": return json(getDB().stats());
         case "routing": return json((await getRouter()).stats());
         case "neural": return json(getSona().stats());
         case "semantic": {

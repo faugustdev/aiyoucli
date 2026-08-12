@@ -17,9 +17,13 @@
  */
 
 import { existsSync, accessSync, constants, statSync, mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { isNapiAvailable } from "../napi/index.js";
+
+const require = createRequire(import.meta.url);
 
 export type WireStatus = "ok" | "degraded" | "in_development" | "failed";
 
@@ -97,43 +101,37 @@ function probeAiyouCliMcp(): WireProbe {
   };
 }
 
-function probeNapiBinary(cwd: string): WireProbe {
-  // Mirror the candidate list in src/napi/index.ts (the actual loader).
-  // The loader tries: (1) <cwd>/aiyoucli-napi.<platform>.node (dev output) and
-  // (2) require("@aiyou-dev/cli-<platform>") (npm optional dep).
-  // We mirror both — the cwd/node_modules paths cover global installs and linked
-  // setups; the cwd-relative paths cover dev/cargo output dropped next to project.
-  const candidates = [
-    // cwd-relative (legacy/dev when binary is dropped next to project)
-    join(cwd, "aiyoucli-napi.darwin-arm64.node"),
-    join(cwd, "aiyoucli-napi.darwin-x64.node"),
-    join(cwd, "aiyoucli-napi.linux-x64-gnu.node"),
-    join(cwd, "aiyoucli-napi.linux-arm64-gnu.node"),
-    join(cwd, "aiyoucli-napi.win32-x64-msvc.node"),
-    join(cwd, "aiyoucli-napi.node"),
-    // cwd's local node_modules (linked install via npm/pnpm/yarn, or global install root)
-    join(cwd, "node_modules", "@aiyou-dev", "cli-darwin-arm64", "aiyoucli-napi.darwin-arm64.node"),
-    join(cwd, "node_modules", "@aiyou-dev", "cli-darwin-x64", "aiyoucli-napi.darwin-x64.node"),
-    join(cwd, "node_modules", "@aiyou-dev", "cli-linux-x64-gnu", "aiyoucli-napi.linux-x64-gnu.node"),
-    join(cwd, "node_modules", "@aiyou-dev", "cli-linux-arm64-gnu", "aiyoucli-napi.linux-arm64-gnu.node"),
-    join(cwd, "node_modules", "@aiyou-dev", "cli-win32-x64-msvc", "aiyoucli-napi.win32-x64-msvc.node"),
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) {
-      const sizeMb = (statSync(c).size / 1024 / 1024).toFixed(2);
-      return {
-        name: "napi",
-        status: "ok",
-        detail: `${c.split("/").pop()} (${sizeMb} MB)`,
-      };
-    }
+function probeNapiBinary(): WireProbe {
+  // Ask the real loader (src/napi/index.ts) rather than re-deriving its
+  // candidate paths. The previous copy only searched the *project* directory
+  // and its node_modules, so a global install — where the binary lives under
+  // the CLI package's own node_modules — always reported "not found" for a
+  // binary that loads perfectly.
+  if (isNapiAvailable()) {
+    return {
+      name: "napi",
+      status: "ok",
+      detail: describeNapiBinary(),
+    };
   }
   return {
     name: "napi",
     status: "failed",
-    detail: "NAPI binary not found",
+    detail: "NAPI binary could not be loaded",
     suggestion: "Run `npm run build:rs` to compile the native module.",
   };
+}
+
+/** Best-effort location/size of the loaded binary, for the probe detail line. */
+function describeNapiBinary(): string {
+  const platformPackage = `@aiyou-dev/cli-${process.platform}-${process.arch}`;
+  try {
+    const resolved = require.resolve(platformPackage);
+    const sizeMb = (statSync(resolved).size / 1024 / 1024).toFixed(2);
+    return `${resolved.split("/").pop()} (${sizeMb} MB)`;
+  } catch {
+    return "loaded";
+  }
 }
 
 function probeAiyouCliDir(cwd: string): WireProbe {
@@ -220,7 +218,7 @@ export function runWireValidation(opts: WireValidationOptions): WireReport {
     probeNode(),
     probeGit(),
     probeAiyouCliMcp(),
-    probeNapiBinary(opts.cwd),
+    probeNapiBinary(),
     probeAiyouCliDir(opts.cwd),
     probeOnnxEmbed(opts.cwd),
   ];

@@ -128,6 +128,33 @@ function getBindings(): NapiBindings {
 }
 
 /**
+ * Raw access to the loaded native bindings.
+ *
+ * Exposed so sibling modules reuse this one loader instead of keeping their
+ * own candidate list. `napi/proxy.ts` used to duplicate it and omitted the
+ * platform npm package fallback, so the proxy engine — and with it `embed`
+ * and the whole auto-indexing pipeline — failed on every install that had
+ * not run `npm run build:rs` locally.
+ */
+export function getNativeBindings(): Record<string, unknown> {
+  return getBindings() as unknown as Record<string, unknown>;
+}
+
+/**
+ * Whether the native binding can be loaded. Probes must call this rather
+ * than re-deriving candidate paths, which is how they ended up reporting
+ * "NAPI binary not found" for a binary that loads fine.
+ */
+export function isNapiAvailable(): boolean {
+  try {
+    getBindings();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Open a persistent vector database at the given path.
  */
 export function openVectorDB(

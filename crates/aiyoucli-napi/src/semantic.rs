@@ -158,8 +158,11 @@ impl SemanticRouter {
 
     /// Generate embedding for a text — delegates to upstream router.
     /// Returns `Vec<f64>` (converted from upstream `Vec<f32>`) for
-    /// backwards compatibility with the previous keyword-based router
-    /// that returned 8-dimensional `f64` vectors.
+    /// backwards compatibility with the previous keyword-based router.
+    ///
+    /// The element type is what is preserved for compatibility, not the
+    /// width: the upstream hasher decides that (128 today), so callers must
+    /// read the length rather than assume the old 8.
     pub fn embed(&self, text: &str) -> Vec<f64> {
         self.inner
             .embed(text)

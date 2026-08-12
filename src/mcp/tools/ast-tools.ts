@@ -3,18 +3,17 @@
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
+import { createProxyEngine, type ProxyEngineHandle } from "../../napi/proxy.js";
 
 function text(t: string): MCPToolResult { return { content: [{ type: "text", text: t }] }; }
 function json(d: unknown): MCPToolResult { return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] }; }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let proxyEngine: any = null;
+let proxyEngine: ProxyEngineHandle | null = null;
 
-function getEngine(): any {
+function getEngine(): ProxyEngineHandle | null {
   if (!proxyEngine) {
     try {
-      const mod = require("../../napi/proxy.js");
-      proxyEngine = mod.createProxyEngine();
+      proxyEngine = createProxyEngine();
     } catch { return null; }
   }
   return proxyEngine;
@@ -33,7 +32,11 @@ export const astTools: MCPTool[] = [
           description: "AST operation mode",
         },
         source: { type: "string", description: "Source code content (for mode=analyze)" },
-        language: { type: "string", description: "Language hint (for mode=analyze)" },
+        language: {
+          type: "string",
+          description:
+            "Language hint (for mode=analyze) — used to synthesize a path when 'path' is omitted",
+        },
         files: {
           type: "array",
           items: {
@@ -45,7 +48,10 @@ export const astTools: MCPTool[] = [
           },
           description: "Array of {path, source} objects (for mode=batch)",
         },
-        path: { type: "string", description: "File path or extension (for mode=detect)" },
+        path: {
+          type: "string",
+          description: "File path — drives parser selection (mode=analyze) or language detection (mode=detect)",
+        },
       },
       required: ["mode"],
     },
@@ -58,11 +64,24 @@ export const astTools: MCPTool[] = [
         switch (mode) {
           case "analyze": {
             if (!input.source) return text("Missing 'source' for mode=analyze");
-            return json(engine.analyzeCode(input.source as string, input.language as string | undefined));
+            // Rust is analyzeCode(path, source) and derives the language from
+            // the path. Passing (source, language) fed the whole file body in
+            // as the path, so every analysis ran against an unknown language.
+            const path = (input.path as string | undefined)
+              ?? (input.language ? `source.${input.language as string}` : undefined);
+            if (!path) {
+              return text("Missing 'path' (or 'language') for mode=analyze — it determines the parser");
+            }
+            return json(engine.analyzeCode(path, input.source as string));
           }
           case "batch": {
             if (!input.files) return text("Missing 'files' for mode=batch");
-            return json(engine.analyzeCodeBatch(input.files as Array<{ path: string; source: string }>));
+            // Rust takes Vec<Vec<String>> — [path, source] pairs, not objects.
+            const files = input.files as Array<{ path: string; source: string }>;
+            const pairs = files.map(
+              (f) => [f.path, f.source] as [string, string]
+            );
+            return json(engine.analyzeCodeBatch(pairs));
           }
           case "detect": {
             if (!input.path) return text("Missing 'path' for mode=detect");

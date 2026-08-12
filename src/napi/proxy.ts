@@ -5,13 +5,7 @@
  * the ProxyEngine class for LLM gateway/proxy operations.
  */
 
-import { createRequire } from "node:module";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
+import { getNativeBindings } from "./index.js";
 
 interface ProxyEngineClass {
   new (): ProxyEngineHandle;
@@ -268,24 +262,20 @@ export interface EmbeddingBatchResult {
 }
 
 function loadProxyBindings(): ProxyEngineClass {
-  const candidates = [
-    join(__dirname, "..", "..", "aiyoucli-napi.linux-x64-gnu.node"),
-    join(__dirname, "..", "..", "aiyoucli-napi.darwin-arm64.node"),
-    join(__dirname, "..", "..", "aiyoucli-napi.darwin-x64.node"),
-    join(__dirname, "..", "..", "aiyoucli-napi.node"),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      const mod = require(candidate) as { ProxyEngine: ProxyEngineClass };
-      return mod.ProxyEngine;
-    }
+  // ProxyEngine lives in the same .node binary as VectorHandle et al., so
+  // reuse the loader in ./index.js rather than keeping a second candidate
+  // list here. The old local list only checked the package root (the dev
+  // `napi build -o .` output) and never fell back to the platform npm
+  // package, which is why the proxy engine was unavailable in every
+  // published install.
+  const bindings = getNativeBindings();
+  const ProxyEngine = bindings.ProxyEngine as ProxyEngineClass | undefined;
+  if (typeof ProxyEngine !== "function") {
+    throw new Error(
+      "aiyoucli-napi loaded but does not export ProxyEngine — the native binary is older than this wrapper."
+    );
   }
-
-  throw new Error(
-    "Failed to load aiyoucli-napi native binding. " +
-      "Run `npm run build:rs` to build the NAPI binary."
-  );
+  return ProxyEngine;
 }
 
 let _proxyBindings: ProxyEngineClass | null = null;

@@ -1,5 +1,6 @@
 import type { MCPTool, MCPToolResult } from "../../types.js";
 import { createRoutingEngine, type RoutingEngine } from "../../napi/index.js";
+import { createProxyEngine, type ProxyEngineHandle } from "../../napi/proxy.js";
 
 function json(d: unknown): MCPToolResult {
   return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
@@ -15,12 +16,11 @@ function getRouter(): RoutingEngine {
   return router;
 }
 
-let proxyEngine: any = null;
-function getProxyEngine(): any {
+let proxyEngine: ProxyEngineHandle | null = null;
+function getProxyEngine(): ProxyEngineHandle | null {
   if (!proxyEngine) {
     try {
-      const mod = require("../../napi/proxy.js");
-      proxyEngine = mod.createProxyEngine();
+      proxyEngine = createProxyEngine();
     } catch {
       return null;
     }
@@ -46,10 +46,10 @@ export const routeTools: MCPTool[] = [
           type: "string",
           description: "Task description to route",
         },
-        embedding: {
-          type: "array",
-          items: { type: "number" },
-          description: "Custom embedding scores (only for hybrid action)",
+        embedding_scores: {
+          type: "object",
+          description:
+            "Route name -> score map, e.g. {\"security\": 0.8, \"testing\": 0.2} (only for hybrid action)",
         },
       },
       required: ["action", "task"],
@@ -76,8 +76,21 @@ export const routeTools: MCPTool[] = [
         case "hybrid": {
           const engine = getProxyEngine();
           if (!engine) return text("Semantic router not available");
-          const embedding = input.embedding as number[] | undefined;
-          return json(engine.semanticRouteHybrid(task, embedding));
+          // Rust reads this as a JSON object (route name -> score) via
+          // `as_object()`; an array silently deserializes to an empty map,
+          // which turned hybrid routing into plain keyword routing.
+          const scores = input.embedding_scores;
+          if (scores === undefined || scores === null) {
+            return text("Missing 'embedding_scores' for action=hybrid");
+          }
+          if (typeof scores !== "object" || Array.isArray(scores)) {
+            return text(
+              "'embedding_scores' must be an object mapping route name to score, e.g. {\"security\": 0.8}"
+            );
+          }
+          return json(
+            engine.semanticRouteHybrid(task, scores as Record<string, number>)
+          );
         }
         case "enhanced": {
           const engine = getProxyEngine();

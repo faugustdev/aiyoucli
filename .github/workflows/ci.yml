@@ -193,16 +193,16 @@ jobs:
 
   publish:
     name: Publish to npm
-    # Only run on tag pushes. We must wait for the build matrix to finish
-    # uploading artifacts (otherwise the download-artifact step finds 0
-    # because uploads haven't happened yet). The matrix cross-compile targets
-    # (Darwin x64, Linux ARM64) sometimes fail on openssl-sys even when the
-    # host builds succeed — `needs.build.result` may be `failure` rather than
-    # `success`. We use `always() && needs.build.result != 'cancelled'` so
-    # we tolerate partial matrix failures but still wait for the matrix to
-    # finish. The publish step only ships artifacts that are actually
-    # present, so a partial matrix still publishes what we have.
-    if: startsWith(github.ref, 'refs/tags/v') && always() && needs.validate-version.result == 'success' && needs.build.result != 'cancelled'
+    # Only run on tag pushes, and only when the ENTIRE build matrix succeeded.
+    #
+    # This used to be `always() && needs.build.result != 'cancelled'` to
+    # tolerate cross-compile failures on openssl-sys. The result was v1.3.1
+    # shipping with 3 of 5 platform binaries: users on Intel macOS and Linux
+    # ARM64 installed a CLI whose native module could never load. The
+    # openssl-sys dependency is gone (the unused `git2` dep that pulled it was
+    # removed), so a matrix failure is now a real failure — fail the release
+    # instead of publishing a partial one.
+    if: startsWith(github.ref, 'refs/tags/v') && needs.validate-version.result == 'success' && needs.build.result == 'success'
     needs: [validate-version, build]
     runs-on: ubuntu-latest
     permissions:
@@ -225,6 +225,24 @@ jobs:
       - run: npm run build:ts
       - name: Prepare platform packages
         run: node scripts/prepare-publish.js
+
+      # Belt and braces: the job gate already requires a green matrix, but a
+      # missing artifact download would otherwise sail through and publish a
+      # partial release, which is exactly what happened for v1.3.1.
+      - name: Verify all platform binaries are present
+        run: |
+          missing=0
+          for platform in darwin-arm64 darwin-x64 linux-x64-gnu linux-arm64-gnu win32-x64-msvc; do
+            if ! ls "npm/$platform"/*.node >/dev/null 2>&1; then
+              echo "::error::Missing native binary for $platform"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Refusing to publish a partial release"
+            exit 1
+          fi
+          echo "All 5 platform binaries present."
 
       - name: Publish platform packages
         run: |

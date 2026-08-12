@@ -77,28 +77,38 @@ describe("runWireValidation", () => {
   });
 
   describe("napi binary probe", () => {
-    it("reports ok when a darwin-arm64 binary exists", () => {
-      writeFileSync(join(tmpDir, "aiyoucli-napi.darwin-arm64.node"), "");
+    // The probe reports whether the native binding actually *loads*, which is
+    // a property of the installation, not of the project directory. It used to
+    // scan `cwd` for a .node file, so a global install always reported "not
+    // found" for a binary that loads fine — and an empty file named
+    // `aiyoucli-napi.node` reported "ok" at 0.00 MB.
+
+    it("reports ok when the native binding loads, regardless of cwd", () => {
       const report = runWireValidation({ cwd: tmpDir });
       const p = findProbe(report, "napi");
       expect(p!.status).toBe("ok");
-      expect(p!.detail).toContain("darwin-arm64");
-      expect(p!.detail).toMatch(/MB\)$/);
+      expect(p!.detail.length).toBeGreaterThan(0);
     });
 
-    it("prefers darwin-arm64 over generic .node", () => {
+    it("ignores stray .node files in the project directory", () => {
+      // An empty file is not a loadable binding; it must not flip the probe.
       writeFileSync(join(tmpDir, "aiyoucli-napi.node"), "");
-      writeFileSync(join(tmpDir, "aiyoucli-napi.darwin-arm64.node"), "");
-      const report = runWireValidation({ cwd: tmpDir });
-      const p = findProbe(report, "napi");
-      expect(p!.detail).toContain("darwin-arm64");
+      const withStray = findProbe(runWireValidation({ cwd: tmpDir }), "napi");
+      const withoutStray = findProbe(runWireValidation({ cwd: tmpdir() }), "napi");
+      expect(withStray!.status).toBe(withoutStray!.status);
     });
 
-    it("reports failed with suggestion when no binary exists", () => {
-      const report = runWireValidation({ cwd: tmpDir });
-      const p = findProbe(report, "napi");
+    it("reports failed with a build suggestion when the binding cannot load", async () => {
+      vi.resetModules();
+      vi.doMock("../src/napi/index.js", () => ({
+        isNapiAvailable: () => false,
+      }));
+      const { runWireValidation: run } = await import("../src/init/wire-validate.js");
+      const p = findProbe(run({ cwd: tmpDir }), "napi");
       expect(p!.status).toBe("failed");
       expect(p!.suggestion).toContain("build:rs");
+      vi.doUnmock("../src/napi/index.js");
+      vi.resetModules();
     });
   });
 

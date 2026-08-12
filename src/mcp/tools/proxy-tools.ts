@@ -3,14 +3,16 @@
  */
 
 import type { MCPTool, MCPToolResult } from "../../types.js";
+import { createProxyEngine, type ProxyEngineHandle } from "../../napi/proxy.js";
 
 function text(t: string): MCPToolResult { return { content: [{ type: "text", text: t }] }; }
 function json(d: unknown): MCPToolResult { return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] }; }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let proxyEngine: any = null;
+let proxyEngine: ProxyEngineHandle | null = null;
 
-function getProxyEngine() {
+// The NAPI binding itself is loaded lazily and cached inside napi/proxy.ts,
+// so importing it statically here costs nothing until the engine is built.
+function getProxyEngine(): ProxyEngineHandle | null {
   if (!proxyEngine) {
     try {
       proxyEngine = createProxyEngine();
@@ -19,12 +21,6 @@ function getProxyEngine() {
     }
   }
   return proxyEngine;
-}
-
-function createProxyEngine() {
-  // Lazy-load NAPI proxy bindings
-  const mod = require("../../napi/proxy.js");
-  return mod.createProxyEngine();
 }
 
 export const proxyTools: MCPTool[] = [

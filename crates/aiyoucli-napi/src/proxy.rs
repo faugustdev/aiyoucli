@@ -397,7 +397,12 @@ impl ProxyEngine {
         serde_json::to_value(&result).unwrap_or_default()
     }
 
-    /// Get an 8-dimension embedding vector for a text (keyword-based, for routing).
+    /// Get a keyword-based embedding vector for a text (for routing).
+    ///
+    /// The width comes from the upstream hasher (`HasherConfig::default()`),
+    /// currently 128 — do not assume a fixed size here. This doc comment
+    /// used to claim 8, which is what led callers to size the vector
+    /// collection wrong and reject every embedding.
     #[napi]
     pub fn semantic_embed(&self, text: String) -> Vec<f64> {
         self.semantic_router.keyword.embed(&text)
