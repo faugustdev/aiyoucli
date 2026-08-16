@@ -612,6 +612,243 @@ const memoryCommand: Command = {
   ],
 };
 
+// ── 4b. codebase ───────────────────────────────────────────────────
+//
+// Primary interface for codebase indexing/search/graph-query (mcp2cli
+// principle: CLI over always-loaded MCP schemas — see
+// codebase-project-tools.ts's header comment). Every action below calls
+// the exact same MCP tool (`codebase_project`/`codebase_query`/
+// `codebase_maintenance`) that the MCP-protocol path uses — zero
+// duplicated logic, same pattern memoryCommand already uses for
+// `memory_search` etc.
+
+const codebaseCommand: Command = {
+  name: "codebase",
+  description: "Codebase indexing, search and graph queries (replaces the old `aiyouvector mcp` server)",
+  subcommands: [
+    {
+      name: "index",
+      description: "Index a repository into the knowledge graph",
+      options: [
+        {
+          name: "mode",
+          description: "Indexing depth: full, moderate, fast, cross-repo-intelligence",
+          type: "string",
+          choices: ["full", "moderate", "fast", "cross-repo-intelligence"],
+        },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const repoPath = ctx.args[0];
+        if (!repoPath) { output.error("Repo path required: aiyoucli codebase index <path>"); return; }
+        const result = await callTool("codebase_project", { mode: "index", repo_path: repoPath, index_mode: ctx.flags.mode });
+        printJson(result);
+      },
+    },
+    {
+      name: "list",
+      description: "List indexed projects",
+      action: async () => {
+        ensureTools();
+        const result = await callTool("codebase_project", { mode: "list" });
+        printJson(result);
+      },
+    },
+    {
+      name: "delete",
+      description: "Remove a project's index",
+      action: async (ctx) => {
+        ensureTools();
+        const project = ctx.args[0];
+        if (!project) { output.error("Project name required: aiyoucli codebase delete <project>"); return; }
+        const result = await callTool("codebase_project", { mode: "delete", project });
+        printJson(result);
+      },
+    },
+    {
+      name: "status",
+      description: "Show a project's node/edge counts and schema",
+      action: async (ctx) => {
+        ensureTools();
+        const project = ctx.args[0];
+        if (!project) { output.error("Project name required: aiyoucli codebase status <project>"); return; }
+        const result = await callTool("codebase_query", { mode: "status", project });
+        printJson(result);
+      },
+    },
+    {
+      name: "search",
+      description: "BM25 or name-pattern search over a project",
+      options: [
+        { name: "query", short: "q", description: "BM25 search query", type: "string" },
+        { name: "name-pattern", description: "Regex name pattern (alternative to --query)", type: "string" },
+        { name: "label", description: "Node label filter, used with --name-pattern", type: "string" },
+        { name: "limit", description: "Result cap (default 200)", type: "number" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const project = ctx.args[0];
+        if (!project) { output.error("Project name required: aiyoucli codebase search <project> --query ..."); return; }
+        const result = await callTool("codebase_query", {
+          mode: "search",
+          project,
+          query: ctx.flags.query || ctx.flags.q,
+          name_pattern: ctx.flags.namePattern,
+          label: ctx.flags.label,
+          limit: ctx.flags.limit,
+        });
+        printJson(result);
+      },
+    },
+    {
+      name: "trace",
+      description: "Trace a call graph from a function",
+      options: [
+        { name: "direction", description: "callers, callees, or both (default both)", type: "string", choices: ["callers", "callees", "both"] },
+        { name: "depth", description: "Trace depth (default 3)", type: "number" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const [project, functionName] = ctx.args;
+        if (!project || !functionName) {
+          output.error("Usage: aiyoucli codebase trace <project> <function_name>");
+          return;
+        }
+        const result = await callTool("codebase_query", {
+          mode: "trace",
+          project,
+          function_name: functionName,
+          direction: ctx.flags.direction,
+          depth: ctx.flags.depth,
+        });
+        printJson(result);
+      },
+    },
+    {
+      name: "changes",
+      description: "Count files with a tracked hash for a project (not a git diff)",
+      action: async (ctx) => {
+        ensureTools();
+        const project = ctx.args[0];
+        if (!project) { output.error("Project name required: aiyoucli codebase changes <project>"); return; }
+        const result = await callTool("codebase_query", { mode: "changes", project });
+        printJson(result);
+      },
+    },
+    {
+      name: "query",
+      description: "Run a Cypher-like query: MATCH (a:Label)-[:EDGE]->(b:Label) ... RETURN ...",
+      options: [
+        { name: "max-rows", description: "Row cap (default 1000)", type: "number" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const [project, cypher] = ctx.args;
+        if (!project || !cypher) {
+          output.error('Usage: aiyoucli codebase query <project> "<cypher>"');
+          return;
+        }
+        const result = await callTool("codebase_query", {
+          mode: "cypher",
+          project,
+          query: cypher,
+          max_rows: ctx.flags.maxRows,
+        });
+        printJson(result);
+      },
+    },
+    {
+      name: "schema",
+      description: "Show node labels and edge types for a project",
+      action: async (ctx) => {
+        ensureTools();
+        const project = ctx.args[0];
+        if (!project) { output.error("Project name required: aiyoucli codebase schema <project>"); return; }
+        const result = await callTool("codebase_query", { mode: "schema", project });
+        printJson(result);
+      },
+    },
+    {
+      name: "snippet",
+      description: "Show the source of a fully qualified symbol",
+      action: async (ctx) => {
+        ensureTools();
+        const [project, qualifiedName] = ctx.args;
+        if (!project || !qualifiedName) {
+          output.error("Usage: aiyoucli codebase snippet <project> <qualified_name>");
+          return;
+        }
+        const result = await callTool("codebase_query", { mode: "snippet", project, qualified_name: qualifiedName });
+        printJson(result);
+      },
+    },
+    {
+      name: "architecture",
+      description: "Clustered architecture overview for a project",
+      options: [
+        { name: "aspects", description: "Comma-separated aspect filter (currently unused upstream)", type: "string" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const project = ctx.args[0];
+        if (!project) { output.error("Project name required: aiyoucli codebase architecture <project>"); return; }
+        const aspects = ctx.flags.aspects ? String(ctx.flags.aspects).split(",") : undefined;
+        const result = await callTool("codebase_query", { mode: "architecture", project, aspects });
+        printJson(result);
+      },
+    },
+    {
+      name: "verify",
+      description: "Verify the on-disk manifest against actual files",
+      options: [
+        { name: "init", description: "Generate the manifest from current disk state", type: "boolean" },
+        { name: "strict", description: "Also fail on untracked files", type: "boolean" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const result = await callTool("codebase_maintenance", { mode: "verify", init: ctx.flags.init, strict: ctx.flags.strict });
+        printJson(result);
+      },
+    },
+    {
+      name: "export",
+      description: "Archive a project",
+      options: [
+        { name: "out-dir", description: "Archive output directory", type: "string" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const project = ctx.args[0];
+        if (!project) { output.error("Project name required: aiyoucli codebase export <project>"); return; }
+        const result = await callTool("codebase_project", { mode: "export", project, out_dir: ctx.flags.outDir });
+        printJson(result);
+      },
+    },
+    {
+      name: "import",
+      description: "Restore a project from an archive",
+      action: async (ctx) => {
+        ensureTools();
+        const archive = ctx.args[0];
+        if (!archive) { output.error("Archive path required: aiyoucli codebase import <archive>"); return; }
+        const result = await callTool("codebase_project", { mode: "import", archive });
+        printJson(result);
+      },
+    },
+    {
+      name: "observe",
+      description: "Run an observer/SONA/profile learning pass over a repo without re-indexing it",
+      action: async (ctx) => {
+        ensureTools();
+        const repoPath = ctx.args[0];
+        if (!repoPath) { output.error("Repo path required: aiyoucli codebase observe <path>"); return; }
+        const result = await callTool("codebase_maintenance", { mode: "observe", repo_path: repoPath });
+        printJson(result);
+      },
+    },
+  ],
+};
+
 // ── 5. mcp ─────────────────────────────────────────────────────────
 
 const mcpCommand: Command = {
@@ -1103,6 +1340,7 @@ export const commands: Command[] = [
   setupCommand,
   teamCommand,
   memoryCommand,
+  codebaseCommand,
   mcpCommand,
   hooksCommand,
   configCommand,

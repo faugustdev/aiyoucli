@@ -24,6 +24,29 @@ interface NapiBindings {
   distillMarkdown: (markdown: string) => string;
   distillFile: (path: string) => string;
   detectTechnologies: (projectDir: string) => DetectResult;
+  // Codebase indexing/search/graph-query — free functions, no handle to
+  // construct (see src/napi/codebase.ts, crates/aiyoucli-napi/src/codebase.rs).
+  codebaseIndexRepository: (repoPath: string, indexMode?: string) => unknown;
+  codebaseListProjects: () => unknown;
+  codebaseDeleteProject: (project: string) => unknown;
+  codebaseProjectStatus: (project: string) => unknown;
+  codebaseSearch: (
+    project: string,
+    query?: string,
+    namePattern?: string,
+    label?: string,
+    limit?: number
+  ) => unknown;
+  codebaseTracePath: (project: string, functionName: string, direction?: string, depth?: number) => unknown;
+  codebaseDetectChanges: (project: string) => unknown;
+  codebaseQueryGraph: (project: string, query: string, maxRows?: number) => unknown;
+  codebaseGraphSchema: (project: string) => unknown;
+  codebaseCodeSnippet: (project: string, qualifiedName: string) => unknown;
+  codebaseArchitecture: (project: string, aspects?: string[]) => unknown;
+  codebaseVerify: (init?: boolean, strict?: boolean) => unknown;
+  codebaseExportProject: (project: string, outDir?: string) => unknown;
+  codebaseImportProject: (archive: string) => unknown;
+  codebaseObservePipeline: (repoPath: string) => unknown;
 }
 
 export interface DetectResult {

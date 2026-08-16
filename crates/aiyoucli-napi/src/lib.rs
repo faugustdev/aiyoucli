@@ -5,6 +5,7 @@ mod analysis;
 mod ast;
 mod attention;
 mod cache;
+mod codebase;
 mod compressor;
 mod detector;
 mod distiller;

@@ -22,6 +22,9 @@ import { statusTools } from "./status-tools.js";
 import { statsTools } from "./stats-tools.js";
 import { embedTools } from "./embed-tools.js";
 import { graphTools } from "./graph-tools.js";
+import { codebaseProjectTools } from "./codebase-project-tools.js";
+import { codebaseQueryTools } from "./codebase-query-tools.js";
+import { codebaseMaintenanceTools } from "./codebase-maintenance-tools.js";
 
 export function registerAllTools(): void {
   registry.registerAll(memoryTools);
@@ -43,4 +46,7 @@ export function registerAllTools(): void {
   registry.registerAll(statsTools);
   registry.registerAll(embedTools);
   registry.registerAll(graphTools);
+  registry.registerAll(codebaseProjectTools);
+  registry.registerAll(codebaseQueryTools);
+  registry.registerAll(codebaseMaintenanceTools);
 }
