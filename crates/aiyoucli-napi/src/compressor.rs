@@ -23,16 +23,26 @@ impl Compressor {
             return text.to_string();
         }
 
-        let head_len = (max_chars as f64 * head_ratio) as usize;
-        let tail_len = max_chars - head_len - 3; // 3 for "..."
+        // Need room for the "..." separator; anything smaller can't show
+        // both a head and a tail, so just hard-truncate instead of letting
+        // `max_chars - head_len - 3` underflow (panics in debug, silently
+        // produces a huge skip() count in release).
+        if max_chars <= 3 {
+            return text.chars().take(max_chars).collect();
+        }
+
+        let budget = max_chars - 3; // chars available for head + tail combined
+        let head_len = ((budget as f64) * head_ratio) as usize;
+        let head_len = head_len.min(budget);
+        let tail_len = budget - head_len;
 
         let head: String = text.chars().take(head_len).collect();
         let tail: String = text
             .chars()
-            .skip(text.len().saturating_sub(tail_len))
+            .skip(text.chars().count().saturating_sub(tail_len))
             .collect();
 
-        format!("{}...{}", head, tail)
+        format!("{head}...{tail}")
     }
 
     /// Remove redundant whitespace and newlines.
@@ -142,5 +152,43 @@ impl Compressor {
                 "normalized": Self::normalize_whitespace(text).len(),
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_middle_noop_when_under_budget() {
+        assert_eq!(Compressor::truncate_middle("short", 100, 0.4), "short");
+    }
+
+    #[test]
+    fn truncate_middle_does_not_panic_on_tiny_max_chars() {
+        // Regression test: max_chars <= 3 used to underflow
+        // `max_chars - head_len - 3`, panicking in debug builds (and
+        // producing a garbage huge skip() count in release).
+        for max_chars in 0..=3 {
+            let out = Compressor::truncate_middle("a much longer piece of text", max_chars, 0.4);
+            assert!(out.chars().count() <= max_chars);
+        }
+    }
+
+    #[test]
+    fn truncate_middle_keeps_head_and_tail() {
+        let text = "0123456789abcdefghijklmnopqrstuvwxyz";
+        let out = Compressor::truncate_middle(text, 10, 0.4);
+        assert!(out.contains("..."));
+        assert!(out.starts_with('0'));
+        assert!(out.ends_with('z'));
+        assert!(out.chars().count() <= 10);
+    }
+
+    #[test]
+    fn analyze_does_not_panic_on_short_or_empty_text() {
+        for text in ["", "a", "ab", "abc", "a very short string"] {
+            let _ = Compressor::analyze(text);
+        }
     }
 }
