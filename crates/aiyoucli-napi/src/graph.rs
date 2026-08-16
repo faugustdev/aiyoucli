@@ -16,7 +16,7 @@ pub struct GraphHandle {
 
 #[napi]
 impl GraphHandle {
-    /// Create a new empty knowledge graph.
+    /// Create a new empty, in-memory knowledge graph (no persistence).
     #[napi(constructor)]
     pub fn new() -> Self {
         Self {
@@ -24,19 +24,89 @@ impl GraphHandle {
         }
     }
 
+    /// Open (or create) a redb-backed knowledge graph at `path`. Loads any
+    /// previously persisted nodes/edges; every mutating call after this
+    /// persists to the same file, so the graph survives process restarts.
+    #[napi(factory)]
+    pub fn open(path: String) -> Result<Self> {
+        let graph = KnowledgeGraph::open(path)
+            .map_err(|e| Error::new(Status::GenericFailure, format!("{e}")))?;
+        Ok(Self {
+            graph: Arc::new(RwLock::new(graph)),
+        })
+    }
+
     /// Add a node. Returns its ID.
     ///
     /// kind: "technology" | "project" | "pattern" | "decision" | "file" | "function" | "concept"
     #[napi]
-    pub fn add_node(&self, kind: String, name: String) -> u32 {
+    pub fn add_node(&self, kind: String, name: String) -> Result<u32> {
         let nk = parse_node_kind(&kind);
         let builder = KnowledgeNodeBuilder::new(nk, &name);
-        self.graph.write().add_node(builder) as u32
+        self.graph
+            .write()
+            .add_node(builder)
+            .map(|id| id as u32)
+            .map_err(|e| Error::new(Status::GenericFailure, format!("{e}")))
+    }
+
+    /// Look up a node by its exact name. Returns JSON or null.
+    #[napi]
+    pub fn get_node_by_name(&self, name: String) -> Option<serde_json::Value> {
+        self.graph.read().get_node_by_name(&name).map(|n| {
+            serde_json::json!({
+                "id": n.id,
+                "name": n.name,
+                "kind": format!("{:?}", n.kind),
+            })
+        })
+    }
+
+    /// Find an edge `from -> to` of the given kind, if one exists. Returns
+    /// its ID or null. See `add_edge` for the `kind` vocabulary.
+    #[napi]
+    pub fn find_edge(&self, from: u32, to: u32, kind: String) -> Option<u32> {
+        let ek = parse_edge_kind(&kind);
+        self.graph
+            .read()
+            .find_edge(from as u64, to as u64, ek)
+            .map(|id| id as u32)
+    }
+
+    /// Update an existing edge's weight in place (e.g. an exponential
+    /// moving average of task-outcome success).
+    #[napi]
+    pub fn update_edge_weight(&self, id: u32, weight: f64) -> Result<()> {
+        self.graph
+            .write()
+            .update_edge_weight(id as u64, weight as f32)
+            .map_err(|e| Error::new(Status::GenericFailure, format!("{e}")))
+    }
+
+    /// List all nodes of a given kind.
+    ///
+    /// kind: "technology" | "project" | "pattern" | "decision" | "file" | "function" | "concept" | "agent"
+    #[napi]
+    pub fn nodes_by_kind(&self, kind: String) -> Vec<serde_json::Value> {
+        let nk = parse_node_kind(&kind);
+        self.graph
+            .read()
+            .nodes_by_kind(nk)
+            .into_iter()
+            .map(|n| {
+                serde_json::json!({
+                    "id": n.id,
+                    "name": n.name,
+                    "kind": format!("{:?}", n.kind),
+                })
+            })
+            .collect()
     }
 
     /// Add a directed edge between two nodes. Returns edge ID.
     ///
-    /// kind: "knows" | "works_on" | "applies" | "used_in" | "relates_to" | "depends_on" | "calls" | "imports"
+    /// kind: "knows" | "works_on" | "applies" | "decided" | "used_in" | "observed_in"
+    ///     | "relates_to" | "evolved_from" | "calls" | "imports" | "depends_on" | "completed_by"
     #[napi]
     pub fn add_edge(&self, from: u32, to: u32, kind: String, weight: f64) -> Result<u32> {
         let ek = parse_edge_kind(&kind);
@@ -142,6 +212,7 @@ fn parse_edge_kind(s: &str) -> EdgeKind {
         "calls" => EdgeKind::Calls,
         "imports" => EdgeKind::Imports,
         "depends_on" => EdgeKind::DependsOn,
+        "completed_by" => EdgeKind::CompletedBy,
         _ => EdgeKind::RelatesTo,
     }
 }

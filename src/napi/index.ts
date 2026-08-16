@@ -216,12 +216,17 @@ export function createAttentionRouter(dim: number): AttentionHandle {
 
 interface GraphHandleConstructor {
   new (): GraphHandle;
+  open(path: string): GraphHandle;
 }
 
 export interface GraphHandle {
   addNode(kind: string, name: string): number;
   addEdge(from: number, to: number, kind: string, weight: number): number;
   getNode(id: number): { id: number; name: string; kind: string } | null;
+  getNodeByName(name: string): { id: number; name: string; kind: string } | null;
+  findEdge(from: number, to: number, kind: string): number | null;
+  updateEdgeWeight(id: number, weight: number): void;
+  nodesByKind(kind: string): Array<{ id: number; name: string; kind: string }>;
   neighbors(
     id: number,
     direction?: string
@@ -237,8 +242,19 @@ export interface GraphHandle {
   stats(): { nodes: number; edges: number };
 }
 
+/**
+ * Create a new, in-memory knowledge graph (no persistence — gone on process exit).
+ */
 export function createKnowledgeGraph(): GraphHandle {
   return new (getBindings().GraphHandle)();
+}
+
+/**
+ * Open (or create) a redb-backed knowledge graph at `path`. Survives process
+ * restarts: nodes/edges written in a previous process are loaded back in.
+ */
+export function openKnowledgeGraph(path: string): GraphHandle {
+  return getBindings().GraphHandle.open(path);
 }
 
 // ── Routing Engine ──────────────────────────────────────────────

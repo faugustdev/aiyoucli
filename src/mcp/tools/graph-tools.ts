@@ -6,21 +6,19 @@
  *   - graph_stats:     return node/edge counts
  *   - graph_neighbors: return neighbors of a node
  *
- * The graph is in-memory per process. The underlying NAPI binding
- * (`GraphHandle` in crates/aiyoucli-napi/src/graph.rs) is the source of
- * truth. We keep a module-level singleton so repeated tool calls in the
- * same process share the same graph instance.
- *
- * Persistence is intentionally NOT implemented in PR #2. The graph is
- * rebuilt by `aiyoucli init` (via `graph_bootstrap`) on every cold start.
- * Future PRs can add a redb-backed persistence layer behind the same
- * GraphHandle API.
+ * The underlying NAPI binding (`GraphHandle` in
+ * crates/aiyoucli-napi/src/graph.rs) is the source of truth. It's opened
+ * redb-backed at `.aiyoucli/graph.redb`, the same convention memory-tools.ts
+ * uses for `vectors.redb` — so the graph survives process restarts instead
+ * of being rebuilt from scratch on every `aiyoucli init`. We still keep a
+ * module-level singleton so repeated tool calls in the same process share
+ * one open handle rather than reopening the file each time.
  */
 
 import { readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { MCPTool, MCPToolResult } from "../../types.js";
-import { createKnowledgeGraph, type GraphHandle } from "../../napi/index.js";
+import { openKnowledgeGraph, type GraphHandle } from "../../napi/index.js";
 
 function json(d: unknown): MCPToolResult {
   return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
@@ -31,9 +29,20 @@ function text(t: string): MCPToolResult {
 
 // ── Singleton graph handle ────────────────────────────────────────
 
+/**
+ * Resolved lazily (not as a module-level constant) so it reflects
+ * `process.cwd()` at the time the graph is actually opened, not at module
+ * import time — matters for tests, which `chdir` into a fresh tmp dir per
+ * test and rely on `resetGraph()` + the next `getGraph()` call picking up
+ * the new cwd's own `.aiyoucli/graph.redb`.
+ */
+function defaultGraphPath(): string {
+  return join(process.cwd(), ".aiyoucli", "graph.redb");
+}
+
 let graph: GraphHandle | null = null;
-function getGraph(): GraphHandle {
-  if (!graph) graph = createKnowledgeGraph();
+export function getGraph(): GraphHandle {
+  if (!graph) graph = openKnowledgeGraph(defaultGraphPath());
   return graph;
 }
 
@@ -43,35 +52,41 @@ function getGraph(): GraphHandle {
  */
 export function resetGraph(): void {
   graph = null;
-  nodeIndex.clear();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
 
 /**
- * Idempotently add a node. Returns the existing node id if the
- * (kind, name) pair is already present in the graph, otherwise
- * creates it and returns the new id.
- *
- * We do a linear scan over the graph for idempotency. For a project
- * with <10k nodes this is fast enough; if it ever becomes a bottleneck
- * we can add a `find_by_kind_name` NAPI method.
+ * Idempotently add a node: looks the (kind, name) pair up in the persisted
+ * graph via `getNodeByName` and returns its id if found, otherwise creates
+ * it. Note `getNodeByName` is keyed by name only (not name+kind) on the
+ * Rust side — fine for today's dataset, where names are unique across
+ * kinds, but a caller mixing kinds with the same name would collide.
  */
-const nodeIndex: Map<string, number> = new Map();
-
-function upsertNode(kind: string, name: string): number {
-  const key = `${kind}:${name}`;
-  const existing = nodeIndex.get(key);
-  if (existing !== undefined) return existing;
-  const id = getGraph().addNode(kind, name);
-  nodeIndex.set(key, id);
-  return id;
+export function upsertNode(kind: string, name: string): number {
+  const existing = getGraph().getNodeByName(name);
+  if (existing) return existing.id;
+  return getGraph().addNode(kind, name);
 }
 
-function upsertEdge(from: number, to: number, kind: string, weight: number): number {
-  // addEdge may fail (e.g. duplicate); we just call it and let the NAPI
-  // error bubble. Most projects have <1000 nodes so dupes are cheap.
+/**
+ * Idempotently add an edge: returns the existing edge id if `from -> to`
+ * of this `kind` already exists, otherwise creates it. This is what makes
+ * graph_bootstrap idempotent across process restarts, not just within one.
+ */
+export function upsertEdge(from: number, to: number, kind: string, weight: number): number {
+  const existing = getGraph().findEdge(from, to, kind);
+  if (existing !== null) return existing;
   return getGraph().addEdge(from, to, kind, weight);
+}
+
+/**
+ * The `project` node name graph_bootstrap derives from a project root —
+ * exported so graph-route-hint.ts can find the same node without
+ * recomputing the convention.
+ */
+export function projectNodeName(cwd: string): string {
+  return cwd.split("/").pop() ?? "project";
 }
 
 /**
@@ -165,8 +180,7 @@ export const graphTools: MCPTool[] = [
       ];
 
       // 1. Project root
-      const projectName = cwd.split("/").pop() ?? "project";
-      const projectId = upsertNode("project", projectName);
+      const projectId = upsertNode("project", projectNodeName(cwd));
 
       // 2. AGENTS.md if present
       let agentsMdId: number | null = null;
@@ -226,7 +240,6 @@ export const graphTools: MCPTool[] = [
       return json({
         nodes: stats.nodes,
         edges: stats.edges,
-        index_size: nodeIndex.size,
       });
     },
   },

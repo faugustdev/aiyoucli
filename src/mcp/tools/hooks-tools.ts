@@ -15,6 +15,7 @@ import {
   type AgentProfile,
 } from "../../napi/index.js";
 import { loadConfig } from "../../config.js";
+import { recordGraphOutcome } from "./graph-outcome.js";
 
 function getQTableDir(): string {
   return join(process.cwd(), ".aiyoucli");
@@ -108,13 +109,25 @@ export const hooksTools: MCPTool[] = [
     },
     handler: async (input) => {
       const r = await getRouter();
-      const reward = (input.success as boolean) ? 1.0 : -0.5;
-      r.recordReward(
-        input.description as string,
-        input.agent as string,
-        reward,
-      );
+      const description = input.description as string;
+      const agent = input.agent as string;
+      const success = input.success as boolean;
+      const reward = success ? 1.0 : -0.5;
+      r.recordReward(description, agent, reward);
       await persistQTable();
+
+      // Write-back learning loop: best-effort, independent of the Q-table
+      // update above — a graph write failure must never break this hook's
+      // response, same as the shell hook below being independently
+      // sequenced from persistQTable().
+      let graphNote = "";
+      try {
+        const outcome = recordGraphOutcome(description, agent, success);
+        graphNote = ` (graph: concept#${outcome.conceptId} -> ${agent} @ ${outcome.weight.toFixed(2)})`;
+      } catch {
+        // Non-critical — the Q-table update above already recorded the
+        // outcome for routing purposes.
+      }
 
       // Execute configured post_task shell command if present
       const config = loadConfig();
@@ -126,7 +139,9 @@ export const hooksTools: MCPTool[] = [
         }
       }
 
-      return text(`Recorded ${(input.success as boolean) ? "success" : "failure"} for ${input.agent} (Q-table saved)`);
+      return text(
+        `Recorded ${success ? "success" : "failure"} for ${agent} (Q-table saved)${graphNote}`
+      );
     },
   },
   {

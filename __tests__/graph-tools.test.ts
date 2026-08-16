@@ -142,6 +142,23 @@ describe("graph_bootstrap", () => {
     expect(d2.total_nodes).toBe(d1.total_nodes);
   });
 
+  it("is idempotent across a simulated process restart (graph reopened from disk)", async () => {
+    const tool = findTool("graph_bootstrap");
+    const r1 = await tool.handler({ mode: "minimal", cwd: tmpDir });
+    const d1 = parseJson(r1) as { total_nodes: number; total_edges: number };
+
+    // Drop the in-process singleton without touching the file on disk —
+    // the next getGraph() call reopens .aiyoucli/graph.redb from scratch,
+    // standing in for a fresh process picking the persisted graph back up.
+    resetGraph();
+
+    const r2 = await tool.handler({ mode: "minimal", cwd: tmpDir });
+    const d2 = parseJson(r2) as { total_nodes: number; total_edges: number };
+
+    expect(d2.total_nodes).toBe(d1.total_nodes);
+    expect(d2.total_edges).toBe(d1.total_edges);
+  });
+
   it("skips heavy directories like node_modules", async () => {
     mkdirSync(join(tmpDir, "node_modules", "foo"), { recursive: true });
     writeFileSync(join(tmpDir, "node_modules", "foo", "index.ts"), "");
@@ -188,28 +205,24 @@ describe("graph_bootstrap", () => {
 });
 
 describe("graph_stats", () => {
-  it("returns nodes/edges/index_size", async () => {
+  it("returns nodes/edges", async () => {
     const bootTool = findTool("graph_bootstrap");
     await bootTool.handler({ mode: "minimal", cwd: tmpDir });
 
     const statsTool = findTool("graph_stats");
     const result = await statsTool.handler({});
-    const data = parseJson(result) as { nodes: number; edges: number; index_size: number };
+    const data = parseJson(result) as { nodes: number; edges: number };
 
     expect(data.nodes).toBeGreaterThan(0);
     expect(data.edges).toBeGreaterThan(0);
-    expect(data.index_size).toBe(data.nodes);
   });
 
-  it("returns zero counts on a fresh graph (different process not tested; first call has data)", async () => {
-    // Note: graphTools is module-scoped, so the singleton persists across
-    // tests in the same file. This test only checks the schema, not zeros.
+  it("returns zero counts on a fresh graph (each test gets its own tmp cwd, so its own graph.redb)", async () => {
     const statsTool = findTool("graph_stats");
     const result = await statsTool.handler({});
-    const data = parseJson(result) as { nodes: number; edges: number; index_size: number };
-    expect(typeof data.nodes).toBe("number");
-    expect(typeof data.edges).toBe("number");
-    expect(typeof data.index_size).toBe("number");
+    const data = parseJson(result) as { nodes: number; edges: number };
+    expect(data.nodes).toBe(0);
+    expect(data.edges).toBe(0);
   });
 });
 
