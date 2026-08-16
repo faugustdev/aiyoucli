@@ -15,7 +15,7 @@
 
 | Signal | Value |
 |--------|-------|
-| **Surface area** | 25 CLI commands · 84 MCP tools · 8 agent roles · 17 Rust crates |
+| **Surface area** | 21 CLI commands · 44 MCP tools · 8 agent roles · 12 Rust crates (2 aiyoucli + 10 aiyouvector) |
 | **Footprint** | 6,441 lines of TypeScript — 65× smaller than comparable tools |
 | **Runtime cost** | Zero runtime dependencies. A single NAPI binary handles all compute |
 | **Latency** | Model tier selection in 0.04ms · Neural learning in 0.18ms · Graph k-hop in 0.08ms |
@@ -28,7 +28,7 @@
                     ┌──────────────────────────────┐
                     │          aiyoucli             │
                     │   CLI + MCP Server (TS)       │
-                    │   25 commands · 84 MCP tools  │
+                    │   21 commands · 44 MCP tools  │
                     └─────┬──────────┬──────────────┘
                           │          │
               ┌───────────┘          └───────────┐
@@ -36,16 +36,22 @@
    ┌──────────────────┐              ┌──────────────────────┐
    │   @aiyou-dev/team │              │    aiyouvector        │
    │  Agent Teams (TS) │              │  Knowledge Graph (Rust)│
-   │  8 agent roles    │              │  17 crates · SQLite    │
-   │  OpenCode plugin  │              │  Tree-sitter · MCP     │
+   │  8 agent roles    │              │  10 crates · SQLite    │
+   │  OpenCode plugin  │              │  Tree-sitter · FFI     │
    └──────────────────┘              └──────────────────────┘
 ```
+
+`aiyouvector` has no MCP server or CLI-facing process of its own — nobody
+uses it directly. `aiyoucli-napi` links its Rust crates in-process (NAPI)
+and `aiyoucli` is the only thing that ever talks to it: as a CLI
+(`aiyoucli codebase ...`, primary) and as 3 consolidated MCP tools
+(secondary, for MCP-only hosts).
 
 | Component | Package | Purpose |
 |-----------|---------|---------|
 | **aiyoucli** | `@aiyou-dev/cli` | CLI + MCP server. Orchestration layer, production middleware, developer experience |
 | **aiyou-team** | `@aiyou-dev/team` | Structured agent teams with role specialization, quality gates, and OpenCode plugin integration |
-| **aiyouvector** | `aiyouvector-*` (Rust) | Codebase knowledge graph, vector engine, developer profile, neural learning, attention routing |
+| **aiyouvector** | `aiyouvector-*` (Rust) | Codebase knowledge graph, vector engine, developer profile, neural learning, attention routing — linked into `aiyoucli` via FFI, no standalone server |
 
 ---
 
@@ -113,6 +119,32 @@ aiyoucli hooks stats                                 Routing statistics
 
 aiyoucli security scan                               Security audit
 aiyoucli performance benchmark --vectors <n>         Vector benchmarks
+```
+
+### Codebase (indexing, search, graph queries)
+
+Primary interface for the `aiyouvector` knowledge-graph engine — CLI-first
+by design (see [Codebase Knowledge Graph](#codebase-knowledge-graph-aiyouvector)
+below for why). Every subcommand calls the same underlying function the
+`codebase_project`/`codebase_query`/`codebase_maintenance` MCP tools call —
+no duplicated logic, just two front doors to one FFI layer.
+
+```
+aiyoucli codebase index <path> [--mode full|moderate|fast|cross-repo-intelligence]
+aiyoucli codebase list                                List indexed projects
+aiyoucli codebase delete <project>                    Remove a project's index
+aiyoucli codebase status <project>                     Node/edge/file counts, schema
+aiyoucli codebase search <project> --query <q>         BM25 or --name-pattern search
+aiyoucli codebase trace <project> <function>            BFS call-graph trace
+aiyoucli codebase changes <project>                     Tracked-file count (not a git diff)
+aiyoucli codebase query <project> "<cypher>"            Cypher-style graph query
+aiyoucli codebase schema <project>                      Node labels + edge types
+aiyoucli codebase snippet <project> <qualified_name>    Source of a symbol
+aiyoucli codebase architecture <project>                Community-detected clusters
+aiyoucli codebase verify [--init] [--strict]            Check the on-disk manifest
+aiyoucli codebase export <project> [--out-dir <d>]      Archive a project
+aiyoucli codebase import <archive>                      Restore a project archive
+aiyoucli codebase observe <path>                        Observer/SONA learning pass, no re-index
 ```
 
 ### MCP & Skills
@@ -192,38 +224,48 @@ aiyou-team setup --language en    # English (default)
 
 ## Codebase Knowledge Graph (`aiyouvector`)
 
-A Rust-native engine that indexes your codebase into a queryable knowledge graph with 17 specialized crates.
+A Rust-native engine that indexes your codebase into a queryable knowledge
+graph. **`aiyouvector` has no MCP server or standalone client-facing
+process** — nobody uses it directly. `aiyoucli-napi` links its crates
+in-process (FFI) and `aiyoucli` is the only consumer: the `codebase`
+CLI command family above is the primary interface (discoverable via
+`--help`, no standing MCP-schema cost — see
+[mcp2cli](https://pypi.org/project/mcp2cli/)'s "save 96-99% of the
+tokens wasted on tool schemas every turn" for the reasoning); 3
+consolidated MCP tools (`codebase_project`, `codebase_query`,
+`codebase_maintenance`) are the secondary path, for MCP-only hosts that
+can't run a shell command. `aiyouvector` also ships a standalone CLI
+binary (`aiyouvector index/search/query/...`) for direct human use, and
+`aiyouvector serve` (feature `visual`) — a separate, human-only 3D
+graph-ui viewer, unrelated to the agent-facing surface above.
 
 ### Architecture
 
 ```
-Layer 4 — Interface        cli · server (HTTP/REST) · mcp
-Layer 3 — Intelligence     graph · attention · solver · gnn
-Layer 2 — Learning         profile · sona · observer · watchdog
-Layer 1 — Foundation       core (HNSW + SIMD + redb) · daemon
+Layer 4 — Codebase         codebase (indexer, BM25/cypher, metagraph/gnn/solver
+                            sub-modules, verifier, exporter, graph-ui [visual])
+Layer 3 — Learning          profile · sona · observer · watchdog
+Layer 2 — Intelligence      routing · attention · embeddings
+Layer 1 — Foundation        core (HNSW + SIMD + redb) · graph
 ```
 
-### 17 Crates
+### 10 Crates
 
 | Crate | Function |
 |-------|----------|
+| `aiyouvector-codebase` | Codebase indexing: tree-sitter parsing, search, tracing, Cypher, graph-ui server |
 | `aiyouvector-core` | Vector engine: HNSW, SIMD distance, redb storage, quantization |
-| `aiyouvector-graph` | Knowledge graph: typed nodes/edges, BFS, CSR export |
-| `aiyouvector-codebase` | Codebase indexing: tree-sitter parsing, search, tracing, MCP server |
-| `aiyouvector-metagraph` | Cross-project meta-graph: graph-of-graphs, relationship detection |
+| `aiyouvector-graph` | Knowledge graph: typed nodes/edges, BFS, CSR export, redb persistence |
 | `aiyouvector-profile` | Developer profile: pattern matching, preference graph, temporal analysis |
 | `aiyouvector-sona` | Self-learning: MicroLoRA (rank 2), REINFORCE, EWC++ consolidation |
 | `aiyouvector-attention` | Attention mechanisms: scaled-dot, multi-head, flash, linear |
-| `aiyouvector-solver` | Sublinear solvers: Forward Push PPR, Conjugate Gradient, Neumann |
-| `aiyouvector-gnn` | Graph Neural Network with neighbor aggregation |
 | `aiyouvector-embeddings` | Feature-hashing text embedder (n-gram + hashing trick), <1μs/embed |
 | `aiyouvector-routing` | Model-tier routing with Q-learning router |
 | `aiyouvector-observer` | Filesystem watcher + SimHash embedder |
 | `aiyouvector-watchdog` | Agent session context + memory change notifications |
-| `aiyouvector-daemon` | Global daemon with Unix socket IPC |
-| `aiyouvector-server` | HTTP/REST API server (axum) |
-| `aiyouvector-visual` | Graph visualization HTTP API |
-| `aiyouvector-cli` | Standalone CLI: init, search, profile, collections, daemon |
+
+`metagraph`/`gnn`/`solver` are sub-modules inside `aiyouvector-codebase`,
+not separate crates.
 
 ### Indexing Pipeline
 
@@ -237,24 +279,19 @@ Layer 1 — Foundation       core (HNSW + SIMD + redb) · daemon
 
 **Supported languages**: Rust, TypeScript/TSX, JavaScript/JSX, Python, Go, Java, C, C++, C#, Ruby, PHP, Scala, Kotlin, Swift, Vue, Svelte, YAML, JSON, Markdown, HTML, CSS, Bash
 
-### MCP Tools (14 graph tools)
+### Access (CLI-first, MCP secondary)
 
-```
-index_repository              Index a repo (full/moderate/fast/cross-repo)
-list_projects                 List all indexed projects with stats
-delete_project                Remove a project database
-index_status                  Node/edge/file counts, labels, edge types
-search_graph                  BM25 or regex name search with label filter
-search_code                   Graph-augmented grep with function-level dedup
-trace_path                    BFS call/dependency tracing (inbound/outbound/both)
-detect_changes                Track file changes since last index
-query_graph                   Execute Cypher queries against the graph
-get_graph_schema              Node labels and edge types
-get_code_snippet              Read source code for a qualified name
-get_architecture              Leiden community detection clusters
-manage_adr                    Architecture Decision Record CRUD
-ingest_traces                 Ingest runtime execution traces
-```
+See [Codebase (indexing, search, graph queries)](#codebase-indexing-search-graph-queries)
+above for the full `aiyoucli codebase ...` command list — that's the
+primary interface. The same 14 operations are also reachable over MCP
+as 3 mode-dispatched tools (not one tool per operation — see
+[MCP Server](#mcp-server) below):
+
+| MCP tool | modes |
+|----------|-------|
+| `codebase_project` | `index`, `list`, `delete`, `export`, `import` |
+| `codebase_query` | `status`, `search`, `trace`, `changes`, `cypher`, `schema`, `snippet`, `architecture` |
+| `codebase_maintenance` | `verify`, `observe` |
 
 ### Cypher Query Support
 
@@ -294,7 +331,10 @@ Leiden-like label propagation with configurable resolution. Returns clusters wit
 
 ## MCP Server
 
-84 tools across 24 modules. Any MCP-compatible client can use them.
+44 tools across 22 modules, all from a single server. Any MCP-compatible
+client can use them; `aiyouvector` has no MCP server of its own — its
+codebase-indexing capability is consolidated into this same process via
+FFI (see [Codebase Knowledge Graph](#codebase-knowledge-graph-aiyouvector)).
 
 ### Configuration
 
@@ -305,10 +345,6 @@ Leiden-like label propagation with configurable resolution. Returns clusters wit
     "aiyoucli": {
       "command": "npx",
       "args": ["@aiyou-dev/cli", "mcp", "start"]
-    },
-    "aiyouvector": {
-      "command": "aiyouvector-codebase",
-      "args": ["mcp"]
     }
   }
 }
@@ -327,7 +363,7 @@ Leiden-like label propagation with configurable resolution. Returns clusters wit
 | **Code & AST Analysis** | Diff, commit, complexity, and multi-language AST analysis |
 | **Skills** | TOON sync, listing, and technology detection |
 | **Distiller** | TOON markdown distillation |
-| **Graph (aiyouvector)** | Index, search, trace, Cypher, architecture, schema, snippets |
+| **Codebase (aiyouvector via FFI)** | Index, search, trace, Cypher, architecture, schema, snippets |
 | **Config & System** | Dot-notation configuration and health diagnostics |
 
 ---
@@ -343,8 +379,7 @@ aiyoucli integrates with [OpenCode](https://opencode.ai) at multiple levels:
 {
   "plugin": ["@aiyou-dev/team"],
   "mcp": {
-    "aiyoucli": { "type": "stdio", "command": "npx", "args": ["@aiyou-dev/cli", "mcp", "start"] },
-    "aiyouvector": { "type": "stdio", "command": "aiyouvector-codebase", "args": ["mcp"] }
+    "aiyoucli": { "type": "stdio", "command": "npx", "args": ["@aiyou-dev/cli", "mcp", "start"] }
   }
 }
 ```
@@ -394,9 +429,10 @@ Rich terminal dashboard showing vectors, tests, git status, model, and context �
 │  detector  45+ techs         │  Research orchestration (rd)    │
 │  distiller TOON format       │  Web search + doc processing   │
 ├──────────────────────────────────────────────────────────────┤
-│                    aiyouvector (17 crates)                    │
-│  codebase graph · profile · embeddings · solver · gnn         │
-│  metagraph · observer · watchdog · daemon · server             │
+│                    aiyouvector (10 crates)                    │
+│  codebase (incl. solver/gnn/metagraph submodules) · graph      │
+│  profile · embeddings · sona · attention · routing             │
+│  observer · watchdog · core                                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
