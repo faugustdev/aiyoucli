@@ -1,6 +1,6 @@
 {
   "name": "@aiyou-dev/cli-linux-arm64-gnu",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "aiyoucli native binding for Linux ARM64 (glibc)",
   "os": [
     "linux"
