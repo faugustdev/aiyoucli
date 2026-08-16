@@ -42,3 +42,4 @@ __tests__/*
 !__tests__/**/*.test.ts
 !__tests__/**/*.test.js
 !__tests__/.gitkeep
+!__tests__/fixtures/

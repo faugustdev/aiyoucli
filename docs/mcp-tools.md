@@ -138,6 +138,14 @@ The auto-indexer uses 8-dim keyword embeddings (HNSW), so `memory_init` defaults
 | `distill_markdown` | Convert Markdown to TOON |
 | `distill_file` | Distill a Markdown file to TOON |
 
+### PDF
+
+| Tool | Purpose |
+|---|---|
+| `pdf_to_markdown` | Convert a local PDF file to Markdown |
+
+Backed by [`pdfrs`](https://crates.io/crates/pdfrs) — pure Rust, no Poppler/PDFium/Python. Native/selectable text only (headings, lists, code blocks, simple column-aligned tables); scanned PDFs with no embedded text layer are **not OCR'd** and yield empty/near-empty output. Known quirk: `pdfrs` (a young, actively-developed crate — pin the exact version) sometimes emits a trailing page-number line (e.g. a lone `1`) in the output; strip it downstream if that matters for your use case. Also available as `aiyoucli pdf2md <file.pdf> [--out file.md]` on the CLI. DOCX/PPTX/XLSX and OCR-for-scanned-PDFs are deliberately out of scope for now — see the [`markdownify`](https://crates.io/crates/markdownify) crate (pure Rust, MIT) as the likely next step for office formats.
+
 ### Dispatch semantics
 
 Tool dispatch includes production hardening: circuit breaker (threshold=10, reset=15s) and retry with exponential backoff (1 retry, 500ms base). Each tool returns `{ ok, text, isError? }` over JSON-RPC; the runtime registry is the source of truth for which tools are reachable.

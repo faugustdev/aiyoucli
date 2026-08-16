@@ -22,6 +22,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json"] }
 sha2 = "0.10"
 regex = "1"
 tempfile = "3"
+# Pure-Rust PDF toolkit (no Poppler/PDFium/system libs) — used for pdf.rs's
+# pdf_to_markdown. Pinned exact version: young, single-maintainer crate.
+pdfrs = "=0.1.9"
 
 # aiyouvector crates — path during dev, switch to git/crates.io for CI
 aiyouvector-core = { path = "../../../aiyouvector/crates/aiyouvector-core" }

@@ -19,6 +19,10 @@ mod embeddings;
 mod firewall;
 mod graph;
 mod llm;
+// Same dead_code caveat as `codebase` above: `pdf_to_markdown` is only
+// reachable from JS, not from `cargo test`'s reachability graph.
+#[cfg_attr(test, allow(dead_code))]
+mod pdf;
 mod proxy;
 mod restrictions;
 mod routing;

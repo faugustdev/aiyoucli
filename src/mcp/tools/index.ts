@@ -13,6 +13,7 @@ import { gccTools } from "./gcc-tools.js";
 import { securityTools } from "./security-tools.js";
 import { performanceTools } from "./performance-tools.js";
 import { distillerTools } from "./distiller-tools.js";
+import { pdfTools } from "./pdf-tools.js";
 import { skillsTools } from "./skills-tools.js";
 import { proxyTools } from "./proxy-tools.js";
 import { astTools } from "./ast-tools.js";
@@ -37,6 +38,7 @@ export function registerAllTools(): void {
   registry.registerAll(securityTools);
   registry.registerAll(performanceTools);
   registry.registerAll(distillerTools);
+  registry.registerAll(pdfTools);
   registry.registerAll(skillsTools);
   registry.registerAll(proxyTools);
   registry.registerAll(astTools);

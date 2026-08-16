@@ -24,6 +24,8 @@ interface NapiBindings {
   distillMarkdown: (markdown: string) => string;
   distillFile: (path: string) => string;
   detectTechnologies: (projectDir: string) => DetectResult;
+  // PDF → Markdown (native text only, no OCR) — see src/pdf.rs.
+  pdfToMarkdown: (path: string) => string;
   // Codebase indexing/search/graph-query — free functions, no handle to
   // construct (see src/napi/codebase.ts, crates/aiyoucli-napi/src/codebase.rs).
   codebaseIndexRepository: (repoPath: string, indexMode?: string) => unknown;
@@ -377,6 +379,17 @@ export function distillFile(path: string): string {
  */
 export function detectTechnologies(projectDir: string): DetectResult {
   return getBindings().detectTechnologies(projectDir);
+}
+
+// ── PDF ──────────────────────────────────────────────────────────
+
+/**
+ * Convert a local PDF file to Markdown. Native/selectable text only —
+ * pure Rust (`pdfrs`), no Poppler/PDFium/Python. Scanned PDFs with no
+ * embedded text layer yield empty or near-empty output (no OCR).
+ */
+export function pdfToMarkdown(path: string): string {
+  return getBindings().pdfToMarkdown(path);
 }
 
 // ── Proxy Engine (semantic router side-channel) ────────────────────

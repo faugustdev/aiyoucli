@@ -302,6 +302,19 @@ Detect technologies in the project and show recommended skills.
 aiyoucli skills detect
 ```
 
+### `aiyoucli pdf2md`
+
+Convert a local PDF file to Markdown (native/selectable text only, no OCR). Pure Rust (`pdfrs`), no Poppler/PDFium/Python.
+
+| Option | Description |
+|---|---|
+| `--out`, `-o` | Write output to a file instead of stdout |
+
+```bash
+aiyoucli pdf2md report.pdf
+aiyoucli pdf2md report.pdf --out report.md
+```
+
 ### `aiyoucli gcc`
 
 Git context controller. Shows current branch, status, recent commits, staged and unstaged changes.

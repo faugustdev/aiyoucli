@@ -1333,6 +1333,33 @@ const skillsCommand: Command = {
   ],
 };
 
+// ── 25. pdf2md ─────────────────────────────────────────────────────
+
+const pdfCommand: Command = {
+  name: "pdf2md",
+  description: "Convert a PDF file to Markdown (native text only, no OCR)",
+  options: [
+    { name: "out", short: "o", description: "Write output to file instead of stdout", type: "string" },
+  ],
+  action: async (ctx) => {
+    ensureTools();
+    const path = ctx.args[0];
+    if (!path) {
+      output.error("Path required: aiyoucli pdf2md <file.pdf>");
+      return;
+    }
+    const result = await callTool("pdf_to_markdown", { path });
+    const out = ctx.flags.out || ctx.flags.o;
+    if (out && !result.isError) {
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(String(out), result.content[0]?.text ?? "");
+      output.log(`Written to ${out}`);
+    } else {
+      printResult(result);
+    }
+  },
+};
+
 // ── Export ──────────────────────────────────────────────────────────
 
 export const commands: Command[] = [
@@ -1357,4 +1384,5 @@ export const commands: Command[] = [
   performanceCommand,
   statuslineCommand,
   skillsCommand,
+  pdfCommand,
 ];
