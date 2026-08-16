@@ -5,6 +5,12 @@ mod analysis;
 mod ast;
 mod attention;
 mod cache;
+// `#[napi]` on free functions (unlike `#[napi] impl` used by vector.rs/
+// graph.rs/proxy.rs) doesn't keep them "used" for dead_code purposes in
+// `cargo test` builds — the real napi build is unaffected since `#[no_mangle]`
+// ABI symbols are exempt from the lint regardless. Real code, real callers
+// (JS), just not visible from `cargo test`'s reachability graph.
+#[cfg_attr(test, allow(dead_code))]
 mod codebase;
 mod compressor;
 mod detector;
