@@ -19,8 +19,8 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       ts: ${{ steps.filter.outputs.ts }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -61,9 +61,9 @@ jobs:
             platform: win32-x64-msvc
     runs-on: ${{ matrix.settings.host }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: faugustdev/aiyouvector
           token: ${{ secrets.AIYOUVECTOR_TOKEN }}
@@ -80,6 +80,20 @@ jobs:
         shell: cmd
         run: mklink /D "%GITHUB_WORKSPACE%\..\aiyouvector" "%GITHUB_WORKSPACE%\_aiyouvector"
 
+      # actions-rust-lang/setup-rust-toolchain's first internal step runs
+      # `brew install bash` on macOS to get a modern bash. GitHub's macOS
+      # runner image ships with `aws/tap` pre-tapped, and Homebrew now
+      # refuses to evaluate untrusted taps, so that `brew install` prints a
+      # "not trusted" warning for a tap this workflow never uses (no AWS
+      # CLI, no aws/tap formula anywhere here). Untapping it first removes
+      # it before that install runs, so Homebrew has nothing untrusted left
+      # to warn about. `|| true` so this can never fail the job — it's
+      # best-effort cleanup, not a gate.
+      - name: Remove untrusted aws/tap before Rust toolchain setup
+        if: runner.os == 'macOS'
+        run: brew untap aws/tap || true
+        shell: bash
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: ${{ matrix.settings.target }}
@@ -88,7 +102,7 @@ jobs:
         with:
           shared-key: build-${{ matrix.settings.target }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -107,20 +121,26 @@ jobs:
         shell: bash
         run: npx napi build --platform --release --package aiyoucli-napi -o . --target ${{ matrix.settings.target }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: bindings-${{ matrix.settings.platform }}
           path: "*.node"
           if-no-files-found: error
+          # Only needed to pass the binary from this job to `publish` within
+          # the same run — nothing ever re-downloads it afterward. Default
+          # retention is 90 days, which just accumulates storage for no
+          # reason; 1 day is the shortest GitHub allows and is still ample
+          # (publish runs within minutes of build in the same workflow).
+          retention-days: 1
 
   test:
     name: Test
     needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: faugustdev/aiyouvector
           token: ${{ secrets.AIYOUVECTOR_TOKEN }}
@@ -135,7 +155,7 @@ jobs:
         with:
           shared-key: test-linux
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -153,9 +173,9 @@ jobs:
     if: needs.changes.outputs.rust == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: faugustdev/aiyouvector
           token: ${{ secrets.AIYOUVECTOR_TOKEN }}
@@ -177,8 +197,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       # The version lives in 7 hand-edited places. This step used to check only
@@ -244,9 +264,9 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -260,7 +280,7 @@ jobs:
       # npm CLI >= 11.5.1, hence the upgrade.
       - run: npm install -g npm@latest
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts/
 
