@@ -69,17 +69,18 @@ writeups worth keeping intact, not gap-doc corrections.
    from the CLI — `count()`/`search()` were already correct even with the
    bug, since the leak was internal to the HNSW graph structure).
 
-3. ~~Migrate npm publish to Trusted Publishing (OIDC).~~ **Done 2026-08-16.**
-   Account owner registered the trusted publisher on npmjs.com for all 6
-   `@aiyou-dev/*` packages (repo `aiyoucli`, workflow `ci.yml`, no
-   environment); `NODE_AUTH_TOKEN`/`secrets.NPM_TOKEN` removed from both
-   `publish` steps in `.github/workflows/ci.yml` — `npm publish` now
-   authenticates purely via the `id-token: write` OIDC token.
-   **Not yet done, optional cleanup**: the `NPM_TOKEN` secret itself still
-   physically exists in repo settings (harmless now that nothing reads it —
-   left in place as an easy one-commit revert path until a real
-   OIDC-authenticated publish has been observed to succeed in the Actions
-   log for a tagged release; delete it afterward).
+3. ~~Migrate npm publish to Trusted Publishing (OIDC).~~ **Done and confirmed
+   working 2026-08-16.** Account owner registered the trusted publisher on
+   npmjs.com for all 6 `@aiyou-dev/*` packages (repo `aiyoucli`, workflow
+   `ci.yml`, no environment); `NODE_AUTH_TOKEN`/`secrets.NPM_TOKEN` removed
+   from both `publish` steps in `.github/workflows/ci.yml`. The v1.6.2
+   release published successfully with zero token — "Publish to npm"
+   passed in 1m16s and `npm view @aiyou-dev/cli@1.6.2` / `@aiyou-dev/cli-darwin-arm64@1.6.2`
+   confirm both are live on the registry with SLSA provenance intact.
+   **Optional cleanup remaining**: the `NPM_TOKEN` secret itself still
+   physically exists in repo settings — nothing reads it anymore, safe to
+   delete whenever the account owner wants to (GitHub repo → Settings →
+   Secrets and variables → Actions).
 
 ## Next up (small, low-risk — pick any, one PR each)
 
