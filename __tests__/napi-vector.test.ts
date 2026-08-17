@@ -81,6 +81,41 @@ describe("VectorDB (NAPI)", () => {
     expect(stats.storage_bytes).toBeGreaterThan(0);
   });
 
+  it("exports all vectors as {id, vector, metadata}[]", () => {
+    const db = inMemoryVectorDB(3, false);
+    db.insert([1, 0, 0], "vec-x", { tag: "a" });
+    db.insert([0, 1, 0], "vec-y");
+
+    const exported = db.exportAll();
+    expect(exported).toHaveLength(2);
+    const x = exported.find((e) => e.id === "vec-x");
+    expect(x?.vector).toEqual([1, 0, 0]);
+    expect(x?.metadata).toEqual({ tag: "a" });
+  });
+
+  it("round-trips export → import into a fresh database", () => {
+    const source = inMemoryVectorDB(3, false);
+    source.insert([1, 0, 0], "vec-x", { tag: "a" });
+    source.insert([0, 1, 0], "vec-y");
+    source.insert([0, 0, 1], "vec-z");
+
+    const dump = source.exportAll();
+
+    const target = inMemoryVectorDB(3, false);
+    expect(target.count()).toBe(0);
+    const ids = target.importAll(dump);
+    expect(ids).toHaveLength(3);
+    expect(target.count()).toBe(3);
+
+    const results = target.search([1, 0, 0], 1);
+    expect(results[0].id).toBe("vec-x");
+  });
+
+  it("import rejects entries with the wrong dimension count", () => {
+    const db = inMemoryVectorDB(3, false);
+    expect(() => db.importAll([{ vector: [1, 2] }])).toThrow();
+  });
+
   it("handles high-dimensional vectors", () => {
     const dim = 128;
     const db = inMemoryVectorDB(dim);

@@ -178,7 +178,11 @@ function writeTextIfNotExists(filePath: string, content: string): FileWriteResul
   return { path: filePath, status: "created" };
 }
 
-// ── .mcp.json (shared — used by Claude Code and OpenCode) ───────
+// ── .mcp.json (Claude Code) ──────────────────────────────────────
+// Disabled by default — see `aiyoucli init --with-mcp`. Wiring the MCP
+// server unconditionally means its ~60 tool schemas get loaded into every
+// turn's context whether or not they're ever called; the CLI covers the
+// same functionality via Bash at zero standing token cost.
 
 function buildMcpJson(): object {
   return {
@@ -203,14 +207,18 @@ function buildClaudeSettings(): object {
   };
 }
 
-function buildClaudeMd(name: string, author: { name: string; email: string }): string {
+function buildClaudeMd(name: string, author: { name: string; email: string }, withMcp: boolean): string {
+  const mcpLine = withMcp
+    ? "MCP: aiyoucli-mcp (configured in .mcp.json) — secondary; prefer the aiyoucli CLI (see AGENTS.md)"
+    : "MCP: disabled by default — use the aiyoucli CLI directly (see AGENTS.md); enable with `aiyoucli init --with-mcp --force`";
   return `@.aiyoucli/agents.dsi.toon
 
 Commits: ${author.name} <${author.email}>
-MCP: aiyoucli-mcp (configured in .mcp.json) — 60 tools (8 consolidated + 2 discovery + 50 individual)
+${mcpLine}
 Team: Use \`task\` tool with \`subagent_type\` to delegate to aiyou-team agents
   - coding-leader, coding-executor, codebase-explorer, reviewer, web-researcher, principal-advisor, multimodal-looker
-Discovery: Call \`capabilities\` first to see NAPI features, aiyouvector, aiyou-team status
+Discovery: \`aiyoucli status\` first (or \`capabilities\` if MCP is enabled)
+Search: \`aiyoucli codebase search|trace|query\` over the knowledge graph instead of reading many files
 Build: npm install && npm run build
 Test: npm test
 `;
@@ -220,14 +228,19 @@ function generateClaude(
   projectRoot: string,
   name: string,
   author: { name: string; email: string },
-  force: boolean
+  force: boolean,
+  withMcp: boolean
 ): FileWriteResult[] {
   const results: FileWriteResult[] = [];
 
-  // .mcp.json — MERGE (preserve existing servers like supabase)
-  results.push(
-    mergeJsonFile(join(projectRoot, ".mcp.json"), buildMcpJson() as Record<string, unknown>, { force })
-  );
+  // .mcp.json — disabled by default (see `aiyoucli init --with-mcp`). Only
+  // written/merged when explicitly requested; left untouched otherwise so
+  // an existing hand-edited file isn't silently disturbed.
+  if (withMcp) {
+    results.push(
+      mergeJsonFile(join(projectRoot, ".mcp.json"), buildMcpJson() as Record<string, unknown>, { force })
+    );
+  }
 
   // .claude/settings.json — MERGE (preserve user's statusLine if present)
   results.push(
@@ -240,7 +253,7 @@ function generateClaude(
 
   // CLAUDE.md — create only (it's documentation, replacing would lose content)
   results.push(
-    writeTextIfNotExists(join(projectRoot, "CLAUDE.md"), buildClaudeMd(name, author))
+    writeTextIfNotExists(join(projectRoot, "CLAUDE.md"), buildClaudeMd(name, author, withMcp))
   );
 
   return results;
@@ -248,13 +261,17 @@ function generateClaude(
 
 // ── Gemini CLI ──────────────────────────────────────────────────
 
-function buildGeminiMd(name: string, author: { name: string; email: string }): string {
+function buildGeminiMd(name: string, author: { name: string; email: string }, withMcp: boolean): string {
+  const mcpLine = withMcp
+    ? "MCP: aiyoucli-mcp — secondary; prefer the aiyoucli CLI (see AGENTS.md)"
+    : "MCP: disabled by default — use the aiyoucli CLI directly (see AGENTS.md); enable with `aiyoucli init --with-mcp --force`";
   return `See .aiyoucli/agents.dsi.toon for project instructions (dense format).
 
 Commits: ${author.name} <${author.email}>
-MCP: aiyoucli-mcp — 60 tools (8 consolidated + 2 discovery + 50 individual)
+${mcpLine}
 Team: aiyou-team agents available via task delegation
-Discovery: Call \`capabilities\` to see NAPI features, aiyouvector, aiyou-team status
+Discovery: \`aiyoucli status\` (or \`capabilities\` if MCP is enabled)
+Search: \`aiyoucli codebase search|trace|query\` over the knowledge graph instead of reading many files
 Status: aiyoucli statusline
 Skills: TOON-distilled in .aiyoucli/skills/
 `;
@@ -263,23 +280,27 @@ Skills: TOON-distilled in .aiyoucli/skills/
 function generateGemini(
   projectRoot: string,
   name: string,
-  author: { name: string; email: string }
+  author: { name: string; email: string },
+  withMcp: boolean
 ): FileWriteResult[] {
   return [
-    writeTextIfNotExists(join(projectRoot, "GEMINI.md"), buildGeminiMd(name, author)),
+    writeTextIfNotExists(join(projectRoot, "GEMINI.md"), buildGeminiMd(name, author, withMcp)),
   ];
 }
 
 // ── OpenCode ────────────────────────────────────────────────────
 
-function buildOpenCodeJson(): object {
+// `mcp.aiyoucli.enabled` defaults to false (see `aiyoucli init --with-mcp`).
+// Unlike `.mcp.json`, OpenCode's schema has an explicit `enabled` toggle, so
+// we keep the server entry self-documenting rather than omitting it.
+function buildOpenCodeJson(withMcp: boolean): object {
   return {
     $schema: "https://opencode.ai/config.json",
     mcp: {
       aiyoucli: {
         type: "local",
         command: ["aiyoucli-mcp"],
-        enabled: true,
+        enabled: withMcp,
       },
     },
     plugin: ["aiyou-team"],
@@ -287,13 +308,17 @@ function buildOpenCodeJson(): object {
   };
 }
 
-function buildOpenCodeMd(name: string, author: { name: string; email: string }): string {
+function buildOpenCodeMd(name: string, author: { name: string; email: string }, withMcp: boolean): string {
+  const mcpLine = withMcp
+    ? "MCP: aiyoucli-mcp (configured in opencode.json) — secondary; prefer the aiyoucli CLI (see AGENTS.md)"
+    : "MCP: disabled by default (opencode.json mcp.aiyoucli.enabled=false) — use the aiyoucli CLI directly (see AGENTS.md); enable with `aiyoucli init --with-mcp --force`";
   return `See AGENTS.md for project instructions.
 
 Commits: ${author.name} <${author.email}>
-MCP: aiyoucli-mcp (configured in opencode.json) — 60 tools (8 consolidated + 2 discovery + 50 individual)
+${mcpLine}
 Team: @aiyou-dev/team plugin — 8 coding-team agents for delegation
-Discovery: Call \`capabilities\` to see NAPI features, aiyouvector, aiyou-team status
+Discovery: \`aiyoucli status\` (or \`capabilities\` if MCP is enabled)
+Search: \`aiyoucli codebase search|trace|query\` over the knowledge graph instead of reading many files
 Status: aiyoucli statusline
 Skills: TOON-distilled in .aiyoucli/skills/
 `;
@@ -303,7 +328,8 @@ function generateOpenCode(
   projectRoot: string,
   name: string,
   author: { name: string; email: string },
-  force: boolean
+  force: boolean,
+  withMcp: boolean
 ): FileWriteResult[] {
   const results: FileWriteResult[] = [];
 
@@ -311,14 +337,14 @@ function generateOpenCode(
   results.push(
     mergeJsonFile(
       join(projectRoot, "opencode.json"),
-      buildOpenCodeJson() as Record<string, unknown>,
+      buildOpenCodeJson(withMcp) as Record<string, unknown>,
       { force }
     )
   );
 
   // OPENCODE.md — create only
   results.push(
-    writeTextIfNotExists(join(projectRoot, "OPENCODE.md"), buildOpenCodeMd(name, author))
+    writeTextIfNotExists(join(projectRoot, "OPENCODE.md"), buildOpenCodeMd(name, author, withMcp))
   );
 
   return results;
@@ -359,12 +385,16 @@ function generateCommon(projectRoot: string): FileWriteResult[] {
  * @param projectRoot  Root directory of the project.
  * @param targets      Which tools to configure. Defaults to all.
  * @param force        Overwrite all files (used by `aiyoucli init --force`).
+ * @param withMcp      Wire up the MCP server (`.mcp.json` / opencode.json `mcp.aiyoucli.enabled`).
+ *                     Disabled by default — see `aiyoucli init --with-mcp`: agents use the CLI
+ *                     via shell instead, avoiding the standing token cost of ~60 MCP tool schemas.
  * @returns Array of write results (created / merged / updated / skipped).
  */
 export async function generateSettings(
   projectRoot: string,
   targets?: ToolTarget[],
-  force = false
+  force = false,
+  withMcp = false
 ): Promise<FileWriteResult[]> {
   const effectiveTargets: ToolTarget[] = targets ?? ["claude", "gemini", "opencode"];
   const name = detectProjectName(projectRoot);
@@ -374,13 +404,13 @@ export async function generateSettings(
   for (const target of effectiveTargets) {
     switch (target) {
       case "claude":
-        results.push(...generateClaude(projectRoot, name, author, force));
+        results.push(...generateClaude(projectRoot, name, author, force, withMcp));
         break;
       case "gemini":
-        results.push(...generateGemini(projectRoot, name, author));
+        results.push(...generateGemini(projectRoot, name, author, withMcp));
         break;
       case "opencode":
-        results.push(...generateOpenCode(projectRoot, name, author, force));
+        results.push(...generateOpenCode(projectRoot, name, author, force, withMcp));
         break;
     }
   }

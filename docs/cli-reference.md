@@ -15,11 +15,13 @@ Interactive project initialization. Creates `AGENTS.md`, writes default settings
 | Option | Description |
 |---|---|
 | `--skip-skills` | Skip community skill installation |
+| `--with-mcp` | Also wire the MCP server (`.mcp.json` / opencode.json). **Off by default** — agents use the `aiyoucli` CLI directly via shell, avoiding the standing token cost of loading ~60 MCP tool schemas into every turn |
 | `--format json` | Output results as JSON |
 
 ```bash
 aiyoucli init
 aiyoucli init --skip-skills
+aiyoucli init --with-mcp --force   # opt into MCP (e.g. for a shell-less client like Claude Desktop)
 ```
 
 ### `aiyoucli status`
@@ -190,6 +192,27 @@ Delete a vector by ID.
 aiyoucli memory delete --id doc-1
 ```
 
+### `aiyoucli memory export`
+
+Export every stored vector as JSON (`{id, vector, metadata}[]`), for backup/migration.
+
+| Option | Description |
+|---|---|
+| `--out`, `-o` | Write output to a file instead of stdout |
+
+```bash
+aiyoucli memory export --out dump.json
+```
+
+### `aiyoucli memory import <file.json>`
+
+Import vectors from a JSON file produced by `memory export`. Every entry's
+vector must match the current database's dimensions.
+
+```bash
+aiyoucli memory import dump.json
+```
+
 ### `aiyoucli neural observe`
 
 Submit an observation to the SONA learning engine.
@@ -338,7 +361,7 @@ aiyoucli statusline --format compact
 
 ### `aiyoucli completions <shell>`
 
-Generate shell completions for your shell.
+Generate shell completions for your shell. Supports `bash`, `zsh`, `fish`, and `powershell` (alias `pwsh`).
 
 ```bash
 # Bash
@@ -346,6 +369,12 @@ aiyoucli completions bash >> ~/.bashrc
 
 # Zsh
 aiyoucli completions zsh >> ~/.zshrc
+
+# Fish
+aiyoucli completions fish > ~/.config/fish/completions/aiyoucli.fish
+
+# PowerShell
+aiyoucli completions powershell >> $PROFILE
 ```
 
 ### `aiyoucli mcp start`
@@ -370,6 +399,35 @@ List all available MCP tools with their descriptions.
 
 ```bash
 aiyoucli mcp tools
+```
+
+### `aiyoucli daemon start` / `status` / `stop`
+
+Background worker daemon — a foreground polling loop over an in-process task
+queue (`WorkerDaemon`/`WorkerQueue`, `src/services/`), the same shape as
+`aiyoucli mcp start`. `start` blocks in the foreground until `Ctrl+C`
+(`SIGINT`/`SIGTERM`), writing `.aiyoucli/daemon.pid` so a separate `status`/
+`stop` invocation can find it. There's no IPC channel back into the running
+process, so `status` only reports whether the PID is alive, not live queue
+stats — and note nothing currently enqueues tasks into the queue by default
+(`WorkerDaemon.dispatch()` is available for callers that wire it up).
+
+```bash
+aiyoucli daemon start
+aiyoucli daemon start --poll-interval 500
+
+# from another terminal
+aiyoucli daemon status
+aiyoucli daemon stop
+```
+
+### `aiyoucli update check` / `install`
+
+Check npm for a newer `@aiyou-dev/cli` version, or install it.
+
+```bash
+aiyoucli update check
+aiyoucli update install
 ```
 
 ---

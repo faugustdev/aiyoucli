@@ -24,6 +24,8 @@ export interface GenerateAgentsMdOptions {
   force?: boolean;
   /** Project root for monorepo detection (defaults to projectRoot). */
   cwd?: string;
+  /** Whether the MCP server is wired up in this project (see `aiyoucli init --with-mcp`). Affects the CLI-vs-MCP guidance rendered. Default false. */
+  withMcp?: boolean;
 }
 
 export interface GenerateAgentsMdResult extends FileWriteResultLite {
@@ -118,7 +120,7 @@ function detectProject(projectRoot: string): ProjectInfo {
 
 // ── Content builders ────────────────────────────────────────────
 
-function buildContent(project: ProjectInfo, aiyouTeamInstalled: boolean): string {
+function buildContent(project: ProjectInfo, aiyouTeamInstalled: boolean, withMcp: boolean): string {
   const { name, description, scripts, source, packageRelPath } = project;
 
   const buildCmd = scripts.build ?? "# no build step detected";
@@ -164,14 +166,55 @@ ${lintCmd.startsWith("#") ? lintCmd : `npm run lint    # ${lintCmd}`}
 - Handle errors explicitly — no silent \`catch {}\` blocks in production paths
 `;
 
+  const toolPriority = `
+## Tool Priority: CLI over MCP
+
+Prefer the \`aiyoucli\` CLI (invoked via shell) over MCP tools whenever both exist
+for the same operation. MCP tool schemas are loaded into context on *every* turn
+regardless of whether they're used; CLI commands cost nothing until you actually
+run one.
+
+${
+  withMcp
+    ? "MCP is wired up in this project (`--with-mcp` was used) as a secondary interface — still default to the CLI table below when you have shell access."
+    : "MCP is **disabled by default** in this project — there is no MCP server entry to load. Use the CLI exclusively. Re-run `aiyoucli init --with-mcp --force` only if a specific client needs MCP (e.g. a shell-less client like Claude Desktop)."
+}
+
+| Task | CLI |
+|---|---|
+| Discovery | \`aiyoucli status\`, \`aiyoucli doctor\` |
+| Memory | \`aiyoucli memory search --vector "..." --k 5\` |
+| Diff / commit / complexity analysis | \`aiyoucli analyze diff\`, \`analyze commit\`, \`analyze complexity <path>\` |
+| Security scan | \`aiyoucli security scan\` |
+| PDF → Markdown | \`aiyoucli pdf2md <file.pdf> [--out file.md]\` |
+| Codebase search / trace / graph | \`aiyoucli codebase search\|trace\|query\|schema\|snippet\|architecture <project> ...\` — see "Code search" below |
+| Skills | \`aiyoucli skills sync\|list\|detect\` |
+| Git context | \`aiyoucli gcc\` |
+
+Run \`aiyoucli --help\`, or \`--help\` on any subcommand, for the full list.
+`;
+
   const agentInstructions = `
 ## Agent Instructions
 
 ### Discovery (check what's available)
 
 Before starting work, discover what aiyoucli exposes:
-- \`capabilities\` — reports NAPI features, aiyouvector integration, aiyou-team availability, embed server status
-- \`version\` — version info for aiyoucli, aiyouvector, aiyou-team, runtime env
+- \`aiyoucli status\` — reports NAPI features, aiyouvector integration, aiyou-team availability, embed server status
+- \`aiyoucli --version\` — version info for aiyoucli, aiyouvector, aiyou-team, runtime env
+
+### Code search — use the graph, not file reads
+
+Before grepping or reading many files to understand call/reference relationships,
+query the indexed knowledge graph instead:
+- \`aiyoucli codebase search <project> --query "..."\` — BM25/name search
+- \`aiyoucli codebase trace <project> <qualified_function_name>\` — call graph trace (needs a *qualified* name; run \`codebase search\` first if unsure of it)
+- \`aiyoucli codebase query <project> "MATCH (a)-[:CALLS]->(b) WHERE ... RETURN ..."\` — Cypher-like query (this schema has no labels on nodes — filter by name/path in \`WHERE\`, not by \`:Label\`)
+- \`aiyoucli codebase schema <project>\` — see what's queryable first if unsure
+- \`aiyoucli codebase index <path>\` — index a repo that hasn't been indexed yet
+
+Only fall back to \`grep\`/file reads across many files when the project isn't
+indexed, or the graph genuinely doesn't have the answer.
 
 ### Memory
 
@@ -207,8 +250,16 @@ Get system status in one tool:
 - \`status\` with \`scope: system|statusline\`
 `;
 
-  const mcpTools = `
-## Available MCP Tools
+  const mcpTools = !withMcp
+    ? `
+## MCP Tools
+
+MCP is disabled by default (see "Tool Priority" above). Run \`aiyoucli mcp tools\`
+for the live list, or \`aiyoucli init --with-mcp --force\` to wire the server and
+regenerate this file with the full tool table.
+`
+    : `
+## Available MCP Tools (secondary — prefer the CLI above)
 
 ### Consolidated tools (use \`action\` / \`scope\` / \`mode\` / \`type\` param)
 
@@ -327,7 +378,7 @@ Install with: \`npm install -g @aiyou-dev/team && aiyou-team setup\`
 - Run tests after code changes; verify build before committing
 `;
 
-  return [header, desc, sourceHint, buildSection, codeStyle, agentInstructions, mcpTools, aiyouTeam, conventions]
+  return [header, desc, sourceHint, buildSection, codeStyle, toolPriority, agentInstructions, mcpTools, aiyouTeam, conventions]
     .join("")
     .trimEnd() + "\n";
 }
@@ -360,7 +411,7 @@ export async function generateAgentsMd(
 
   const project = detectProject(projectRoot);
   const aiyouTeamInstalled = checkAiyouTeamStatus().installed;
-  const content = buildContent(project, aiyouTeamInstalled);
+  const content = buildContent(project, aiyouTeamInstalled, opts.withMcp ?? false);
 
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, content, "utf-8");

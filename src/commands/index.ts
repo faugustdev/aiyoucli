@@ -5,7 +5,8 @@
  * `callTool`, and formats the result using `output`/`color`.
  */
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, execSync } from "node:child_process";
+import { join, dirname } from "node:path";
 
 import { callTool, registry } from "../mcp/client.js";
 import { output, color } from "../output.js";
@@ -31,6 +32,7 @@ import {
   type VerifyReport,
 } from "../init/verify.js";
 import { warmup, renderWarmupReport, type WarmupReport } from "../init/warmup.js";
+import { packageVersion } from "../version.js";
 import type { Command, MCPToolResult } from "../types.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -132,6 +134,7 @@ const initCommand: Command = {
     { name: "skip-proxy", description: "Skip Phase 3 proxy health checks", type: "boolean" },
     { name: "skip-watcher", description: "Skip aiyouvector daemon watch hook (Phase 3.11)", type: "boolean" },
     { name: "tool", short: "t", description: "Tools to configure: claude, gemini, opencode, all (default: all)", type: "string" },
+    { name: "with-mcp", description: "Also wire the MCP server (.mcp.json / opencode.json). Disabled by default — agents use the aiyoucli CLI directly via shell, avoiding the standing token cost of ~60 MCP tool schemas", type: "boolean" },
   ],
   examples: [
     { command: "aiyoucli init", description: "Initialize with full 4-phase bootstrap (wire + write + warm + verify)" },
@@ -139,6 +142,7 @@ const initCommand: Command = {
     { command: "aiyoucli init --tool claude,opencode", description: "Initialize for Claude Code and OpenCode" },
     { command: "aiyoucli init --tool all", description: "Initialize for all supported tools" },
     { command: "aiyoucli init --skip-verify", description: "Skip Phase 4 verification (faster init)" },
+    { command: "aiyoucli init --with-mcp", description: "Also wire the MCP server (off by default)" },
   ],
   action: async (ctx) => {
     const cwd = ctx.cwd;
@@ -162,12 +166,14 @@ const initCommand: Command = {
     spinner.start();
 
     const fileResults: FileWriteResult[] = [];
+    const withMcp = ctx.flags.withMcp as boolean;
 
     // 1. Generate AGENTS.md (always)
     try {
       const agentsMdResult = await generateAgentsMd(cwd, {
         force: ctx.flags.force as boolean,
         cwd,
+        withMcp,
       });
       // Warn when an existing AGENTS.md is being overwritten with significantly different content
       if (agentsMdResult.diff) {
@@ -195,7 +201,7 @@ const initCommand: Command = {
 
     // 2. Generate tool-specific configs
     try {
-      const settingsResults = await generateSettings(cwd, targets, ctx.flags.force as boolean);
+      const settingsResults = await generateSettings(cwd, targets, ctx.flags.force as boolean, withMcp);
       fileResults.push(...settingsResults);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -491,7 +497,7 @@ const teamCommand: Command = {
 
 const memoryCommand: Command = {
   name: "memory",
-  description: "Vector memory (store, search, list)",
+  description: "Vector memory (store, search, list, export/import)",
   subcommands: [
     {
       name: "init",
@@ -606,6 +612,44 @@ const memoryCommand: Command = {
         const id = ctx.flags.id || ctx.args[0];
         if (!id) { output.error("Vector ID required: --id <id>"); return; }
         const result = await callTool("memory_delete", { id });
+        printResult(result);
+      },
+    },
+    {
+      name: "export",
+      description: "Export every stored vector as JSON, for backup/migration",
+      options: [
+        { name: "out", short: "o", description: "Write output to file instead of stdout", type: "string" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const result = await callTool("memory_export", {});
+        const out = ctx.flags.out || ctx.flags.o;
+        if (out && !result.isError) {
+          const { writeFileSync } = await import("node:fs");
+          writeFileSync(String(out), result.content[0]?.text ?? "");
+          output.log(`Written to ${out}`);
+        } else {
+          printJson(result);
+        }
+      },
+    },
+    {
+      name: "import",
+      description: "Import vectors from a JSON file produced by `memory export`",
+      action: async (ctx) => {
+        ensureTools();
+        const path = ctx.args[0];
+        if (!path) { output.error("Path required: aiyoucli memory import <file.json>"); return; }
+        const { readFileSync } = await import("node:fs");
+        let entries: unknown;
+        try {
+          entries = JSON.parse(readFileSync(path, "utf-8"));
+        } catch (e) {
+          output.error(`Could not read/parse ${path}: ${e instanceof Error ? e.message : String(e)}`);
+          return;
+        }
+        const result = await callTool("memory_import", { entries });
         printResult(result);
       },
     },
@@ -1194,12 +1238,127 @@ const gccCommand: Command = {
 
 // ── 17. daemon ─────────────────────────────────────────────────────
 
+/**
+ * Not an MCP tool, unlike the rest of this file: `WorkerDaemon` is a
+ * foreground, long-running EventEmitter loop (like `mcp start`), which
+ * doesn't fit the MCP request/response model. It's imported directly from
+ * `../services/worker-daemon.js`.
+ *
+ * Cross-process status/stop use a PID file (`.aiyoucli/daemon.pid`) — there
+ * is no IPC channel back into a running daemon, so `status` only reports
+ * "running (pid N)", not live queue stats. Note the daemon's queue has no
+ * producer wired up yet (nothing calls `WorkerDaemon.dispatch()` outside its
+ * own tests) — `start` gives you the polling loop, not a populated queue.
+ */
+function daemonPidFile(): string {
+  return join(process.cwd(), ".aiyoucli", "daemon.pid");
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM"; // exists, just not ours
+  }
+}
+
 const daemonCommand: Command = {
   name: "daemon",
-  description: "Background workers",
-  action: async () => {
-    output.log(color.yellow("daemon not yet implemented"));
-  },
+  description: "Background worker daemon (foreground polling loop over the in-process task queue)",
+  subcommands: [
+    {
+      name: "start",
+      description: "Start the daemon in the foreground (like `mcp start`) — Ctrl+C to stop",
+      options: [
+        { name: "poll-interval", description: "Poll interval in ms (default: 1000)", type: "number" },
+      ],
+      action: async (ctx) => {
+        const { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } = await import("node:fs");
+        const pidFile = daemonPidFile();
+
+        if (existsSync(pidFile)) {
+          const existingPid = Number(readFileSync(pidFile, "utf-8").trim());
+          if (existingPid && isProcessAlive(existingPid)) {
+            output.error(`Daemon already running (pid ${existingPid}). Run \`aiyoucli daemon stop\` first.`);
+            return;
+          }
+        }
+
+        const { WorkerDaemon } = await import("../services/worker-daemon.js");
+        const pollInterval = ctx.flags.pollInterval as number | undefined;
+        const daemon = new WorkerDaemon({ pollInterval });
+
+        mkdirSync(dirname(pidFile), { recursive: true });
+        writeFileSync(pidFile, String(process.pid));
+
+        const shutdown = () => {
+          daemon.stop();
+          try {
+            unlinkSync(pidFile);
+          } catch {
+            // already gone — fine
+          }
+          output.log("Daemon stopped");
+          process.exit(0);
+        };
+        process.on("SIGINT", shutdown);
+        process.on("SIGTERM", shutdown);
+
+        daemon.start();
+        output.log(
+          `Daemon started (pid ${process.pid}). Ctrl+C to stop. ` +
+            `Note: nothing currently enqueues tasks into it — see WorkerDaemon.dispatch().`
+        );
+
+        // Keep the process alive; the interval timer inside WorkerDaemon
+        // already does this in practice, but be explicit.
+        await new Promise(() => {});
+      },
+    },
+    {
+      name: "status",
+      description: "Check whether the daemon is running",
+      action: async () => {
+        const { existsSync, readFileSync } = await import("node:fs");
+        const pidFile = daemonPidFile();
+        if (!existsSync(pidFile)) {
+          output.log("Daemon not running (no pid file)");
+          return;
+        }
+        const pid = Number(readFileSync(pidFile, "utf-8").trim());
+        output.log(
+          pid && isProcessAlive(pid)
+            ? `Daemon running (pid ${pid})`
+            : "Daemon not running (stale pid file)"
+        );
+      },
+    },
+    {
+      name: "stop",
+      description: "Stop a running daemon",
+      action: async () => {
+        const { existsSync, readFileSync, unlinkSync } = await import("node:fs");
+        const pidFile = daemonPidFile();
+        if (!existsSync(pidFile)) {
+          output.log("Daemon not running (no pid file)");
+          return;
+        }
+        const pid = Number(readFileSync(pidFile, "utf-8").trim());
+        if (pid && isProcessAlive(pid)) {
+          process.kill(pid, "SIGTERM");
+          output.log(`Sent SIGTERM to daemon (pid ${pid})`);
+        } else {
+          output.log("Daemon not running (stale pid file)");
+          try {
+            unlinkSync(pidFile);
+          } catch {
+            // fine
+          }
+        }
+      },
+    },
+  ],
 };
 
 // ── 18. completions ────────────────────────────────────────────────
@@ -1208,7 +1367,13 @@ const completionsCommand: Command = {
   name: "completions",
   description: "Shell completions",
   options: [
-    { name: "shell", short: "s", description: "Shell type: bash, zsh", type: "string" },
+    { name: "shell", short: "s", description: "Shell type: bash, zsh, fish, powershell", type: "string" },
+  ],
+  examples: [
+    { command: "aiyoucli completions bash >> ~/.bashrc", description: "Bash" },
+    { command: "aiyoucli completions zsh >> ~/.zshrc", description: "Zsh" },
+    { command: "aiyoucli completions fish > ~/.config/fish/completions/aiyoucli.fish", description: "Fish" },
+    { command: "aiyoucli completions powershell >> $PROFILE", description: "PowerShell" },
   ],
   action: async (ctx) => {
     const shell = (ctx.flags.shell || ctx.flags.s || ctx.args[0] || "bash") as string;
@@ -1222,6 +1387,20 @@ _aiyoucli() {
   _describe 'command' commands
 }
 compdef _aiyoucli aiyoucli`);
+    } else if (shell === "fish") {
+      const lines = commands
+        .map((c) => `complete -c aiyoucli -f -n "__fish_use_subcommand" -a "${c.name}" -d "${c.description.replace(/"/g, "'")}"`)
+        .join("\n");
+      output.log(`# fish completion for aiyoucli
+${lines}`);
+    } else if (shell === "powershell" || shell === "pwsh") {
+      output.log(`# PowerShell completion for aiyoucli
+Register-ArgumentCompleter -Native -CommandName aiyoucli -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $commands = @(${commands.map((c) => `'${c.name}'`).join(", ")})
+    $commands | Where-Object { $_ -like "$wordToComplete*" } |
+        ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+}`);
     } else {
       output.log(`# bash completion for aiyoucli
 _aiyoucli() {
@@ -1235,12 +1414,46 @@ complete -F _aiyoucli aiyoucli`);
 
 // ── 19. update ─────────────────────────────────────────────────────
 
+const NPM_PACKAGE_NAME = "@aiyou-dev/cli";
+
 const updateCommand: Command = {
   name: "update",
-  description: "Self-update",
-  action: async () => {
-    output.log(color.yellow("update not yet implemented"));
-  },
+  description: "Check for / install aiyoucli updates from npm",
+  subcommands: [
+    {
+      name: "check",
+      description: "Check npm for a newer version than the one currently installed",
+      action: async () => {
+        const current = packageVersion();
+        let latest: string;
+        try {
+          latest = execSync(`npm view ${NPM_PACKAGE_NAME} version`, { encoding: "utf-8" }).trim();
+        } catch (e) {
+          output.error(`Could not reach the npm registry: ${e instanceof Error ? e.message : String(e)}`);
+          return;
+        }
+        if (latest === current) {
+          output.log(`Up to date (v${current})`);
+        } else {
+          output.log(`Update available: v${current} → v${latest}`);
+          output.log(`Run \`aiyoucli update install\` to upgrade.`);
+        }
+      },
+    },
+    {
+      name: "install",
+      description: "Install the latest version globally via npm",
+      action: async () => {
+        output.log(`Running: npm install -g ${NPM_PACKAGE_NAME}@latest`);
+        try {
+          execSync(`npm install -g ${NPM_PACKAGE_NAME}@latest`, { stdio: "inherit" });
+          output.log(color.green("Updated."));
+        } catch (e) {
+          output.error(`Update failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      },
+    },
+  ],
 };
 
 // ── 20. performance ────────────────────────────────────────────────

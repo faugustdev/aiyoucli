@@ -10,6 +10,13 @@ The Model Context Protocol (MCP) is a standard for connecting AI models to exter
 
 The live tool surface is authoritative — run `aiyoucli mcp tools` for the current list. This page describes the **shape** of the registered tools and their parameter conventions; consult the runtime registry for the exact count.
 
+> **MCP is disabled by default as of `aiyoucli init`.** Every tool documented here also
+> exists as a CLI command (`aiyoucli <command>`, see [CLI Reference](cli-reference.md)) — the
+> CLI and MCP layers call the same handlers. Prefer the CLI via shell: it costs nothing until
+> invoked, whereas MCP tool schemas (~60 of them) load into context on every turn once wired.
+> Run `aiyoucli init --with-mcp --force` to opt back in — useful for clients without shell
+> access (e.g. Claude Desktop).
+
 ## Connecting to aiyoucli via MCP
 
 Add the following to your `.mcp.json` (project root or `~/.claude/.mcp.json`):
@@ -38,7 +45,7 @@ Or if aiyoucli is installed globally:
 }
 ```
 
-Agent-team delegation is owned by `@aiyou-dev/team` (OpenCode plugin). Claude Code support for the same team is deferred — see `plans/aiyoucli-deferred-work.md`.
+Agent-team delegation is owned by `@aiyou-dev/team` (OpenCode plugin). Claude Code support for the same team is deferred — see `../ROADMAP.md`.
 
 ---
 
@@ -72,6 +79,8 @@ The MCP registry groups currently shipped tools as follows.
 | `memory_search` | Nearest-neighbor search via HNSW |
 | `memory_count` | Total vectors stored |
 | `memory_delete` | Delete a vector by ID |
+| `memory_export` | Export every stored vector as JSON (`{id, vector, metadata}[]`), for backup/migration |
+| `memory_import` | Import entries previously produced by `memory_export`. Dimensions must match the current database |
 
 The auto-indexer uses 8-dim keyword embeddings (HNSW), so `memory_init` defaults to dimensions=8. ONNX 384-dim embeddings are available separately via the embed server for opt-in flows.
 
@@ -154,5 +163,5 @@ Tool dispatch includes production hardening: circuit breaker (threshold=10, rese
 
 - Per-agent / per-swarm / per-task / per-session tools are intentionally absent. Coordination lives in `@aiyou-dev/team` (OpenCode).
 - `metrics_*` were removed; cost/latency/memory/tool stats are now exposed via `stats` scopes.
-- Deep research (`rd_*`) is implemented internally but not registered. Finish it before exposing — see `plans/aiyoucli-deferred-work.md`.
+- Deep research (`rd_*`) is implemented internally but not registered. Finish it before exposing — see `../ROADMAP.md`.
 - Local model management tools were removed; the gateway handles remote providers.

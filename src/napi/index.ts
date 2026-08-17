@@ -75,6 +75,16 @@ export interface VectorHandle {
   delete(id: string): boolean;
   count(): number;
   stats(): DbStats;
+  /** Export every stored vector as `{id, vector, metadata}[]`, for backup/migration. */
+  exportAll(): VectorExportEntry[];
+  /** Import entries previously produced by `exportAll`. Returns assigned IDs. */
+  importAll(entries: VectorExportEntry[]): string[];
+}
+
+export interface VectorExportEntry {
+  id?: string;
+  vector: number[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface SearchResult {

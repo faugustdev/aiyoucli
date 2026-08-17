@@ -35,9 +35,23 @@ function findResult(results: FileWriteResult[], relativePath: string): FileWrite
   return r;
 }
 
-describe("generateSettings — .mcp.json merge", () => {
-  it("creates .mcp.json with aiyoucli server when file does not exist", async () => {
+describe("generateSettings — MCP disabled by default", () => {
+  it("does not write .mcp.json when withMcp is omitted", async () => {
     const results = await generateSettings(tmpDir, ["claude"]);
+    expect(results.some((r) => r.path.endsWith(".mcp.json"))).toBe(false);
+    expect(existsSync(join(tmpDir, ".mcp.json"))).toBe(false);
+  });
+
+  it("writes opencode.json with mcp.aiyoucli.enabled=false when withMcp is omitted", async () => {
+    await generateSettings(tmpDir, ["opencode"]);
+    const content = JSON.parse(readFileSync(join(tmpDir, "opencode.json"), "utf-8"));
+    expect(content.mcp.aiyoucli.enabled).toBe(false);
+  });
+});
+
+describe("generateSettings — .mcp.json merge (--with-mcp)", () => {
+  it("creates .mcp.json with aiyoucli server when file does not exist", async () => {
+    const results = await generateSettings(tmpDir, ["claude"], false, true);
     const result = findResult(results, ".mcp.json");
 
     expect(result.status).toBe("created");
@@ -61,7 +75,7 @@ describe("generateSettings — .mcp.json merge", () => {
       "utf-8"
     );
 
-    const results = await generateSettings(tmpDir, ["claude"]);
+    const results = await generateSettings(tmpDir, ["claude"], false, true);
     const result = findResult(results, ".mcp.json");
 
     expect(result.status).toBe("merged");
@@ -73,8 +87,8 @@ describe("generateSettings — .mcp.json merge", () => {
   });
 
   it("is idempotent — second run returns skipped (no duplicate servers)", async () => {
-    await generateSettings(tmpDir, ["claude"]);
-    const secondRun = await generateSettings(tmpDir, ["claude"]);
+    await generateSettings(tmpDir, ["claude"], false, true);
+    const secondRun = await generateSettings(tmpDir, ["claude"], false, true);
     const result = findResult(secondRun, ".mcp.json");
 
     expect(result.status).toBe("skipped");
@@ -95,7 +109,7 @@ describe("generateSettings — .mcp.json merge", () => {
       "utf-8"
     );
 
-    await generateSettings(tmpDir, ["claude"]);
+    await generateSettings(tmpDir, ["claude"], false, true);
     const content = JSON.parse(readFileSync(mcpPath, "utf-8"));
     expect(content.customField).toEqual({ foo: "bar" });
     expect(content.experimental).toEqual(["flag-a", "flag-b"]);
@@ -109,7 +123,7 @@ describe("generateSettings — .mcp.json merge", () => {
       "utf-8"
     );
 
-    const results = await generateSettings(tmpDir, ["claude"], true);
+    const results = await generateSettings(tmpDir, ["claude"], true, true);
     const result = findResult(results, ".mcp.json");
     expect(result.status).toBe("updated");
 

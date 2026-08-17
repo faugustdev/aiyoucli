@@ -1,6 +1,6 @@
 # aiyoucli vs @aiyou-dev/cli — Comparativa
 
-> **Snapshot histórico.** Esta tabla quedó fijada en la migración inicial. La superficie actual de aiyoucli retiró los comandos `agent`, `swarm`, `task`, `session`, `models`, `rd` y los módulos de tools homónimos — esa eliminación posterior no está reflejada en las filas siguientes. La fuente de verdad actual es `aiyoucli mcp tools` y `plans/aiyoucli-deferred-work.md`.
+> **Snapshot histórico — versión corta.** Superseded by [`RUFLO-V3-VS-AIYOUCLI.md`](RUFLO-V3-VS-AIYOUCLI.md), which covers the same migration in more detail and stays in sync with `ROADMAP.md`. Kept here only for anything that still links to this file. Esta tabla quedó fijada en la migración inicial: la superficie actual de aiyoucli retiró los comandos `agent`, `swarm`, `task`, `session`, `models`, `rd` y los módulos de tools homónimos — esa eliminación posterior no está reflejada en las filas siguientes. La fuente de verdad actual es `aiyoucli mcp tools` y `../ROADMAP.md`.
 
 ## Tamaño del proyecto
 

@@ -151,6 +151,52 @@ export const memoryTools: MCPTool[] = [
   },
 
   {
+    name: "memory_export",
+    description: "Export every stored vector as JSON ({id, vector, metadata}[]), for backup/migration",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => {
+      return jsonResult(getDB().exportAll());
+    },
+  },
+
+  {
+    name: "memory_import",
+    description: "Import vector entries previously produced by memory_export. Dimensions must match the current database.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entries: {
+          type: "array",
+          description: "Entries to import, as produced by memory_export",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              vector: { type: "array", items: { type: "number" } },
+              metadata: { type: "object" },
+            },
+            required: ["vector"],
+          },
+        },
+      },
+      required: ["entries"],
+    },
+    handler: async (input) => {
+      const entries = input.entries as { id?: string; vector: number[]; metadata?: Record<string, unknown> }[];
+      const config = loadConfig();
+      for (const entry of entries) {
+        if (entry.vector.length !== config.dimensions) {
+          throw new Error(
+            `Entry${entry.id ? ` "${entry.id}"` : ""} has ${entry.vector.length} dimensions, expected ${config.dimensions}`
+          );
+        }
+      }
+      const ids = getDB().importAll(entries);
+      return textResult(`Imported ${ids.length} vector(s)`);
+    },
+  },
+
+  {
     name: "memory_delete",
     description: "Delete a vector by ID",
     inputSchema: {

@@ -134,6 +134,33 @@ impl VectorHandle {
         self.db.lock().count() as u32
     }
 
+    /// Export every stored vector as JSON (`[{id, vector, metadata}, ...]`),
+    /// for backup/migration. Order is not guaranteed to match insertion order.
+    #[napi]
+    pub fn export_all(&self) -> Result<serde_json::Value> {
+        let entries = self
+            .db
+            .lock()
+            .export_all()
+            .map_err(|e| Error::new(Status::GenericFailure, format!("Export failed: {e}")))?;
+
+        serde_json::to_value(&entries)
+            .map_err(|e| Error::new(Status::GenericFailure, format!("Serialize failed: {e}")))
+    }
+
+    /// Import vector entries previously produced by `export_all`. Returns the
+    /// assigned IDs (existing `id` fields are preserved when present).
+    #[napi]
+    pub fn import_all(&self, entries: serde_json::Value) -> Result<Vec<String>> {
+        let parsed: Vec<VectorEntry> = serde_json::from_value(entries)
+            .map_err(|e| Error::new(Status::InvalidArg, format!("Invalid entries: {e}")))?;
+
+        self.db
+            .lock()
+            .insert_batch(parsed)
+            .map_err(|e| Error::new(Status::GenericFailure, format!("Import failed: {e}")))
+    }
+
     /// Get database statistics as JSON.
     #[napi]
     pub fn stats(&self) -> Result<serde_json::Value> {

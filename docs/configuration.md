@@ -140,4 +140,4 @@ alias aiyoucli='AIYOUCLI_MEMORY_DIMENSIONS=384 aiyoucli'
 
 ## Agent Team
 
-Agent orchestration is owned by `@aiyou-dev/team` (OpenCode plugin). There is no `swarm`, `agents`, or `tasks` block in aiyoucli's config — those settings live in `aiyou-team`'s runtime configuration. See `plans/aiyoucli-deferred-work.md` for the Claude Code plan.
+Agent orchestration is owned by `@aiyou-dev/team` (OpenCode plugin). There is no `swarm`, `agents`, or `tasks` block in aiyoucli's config — those settings live in `aiyou-team`'s runtime configuration. See `../ROADMAP.md` for the Claude Code plan.

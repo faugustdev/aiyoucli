@@ -2,6 +2,12 @@
 
 Generated: 2026-03-28
 
+> **Stale as of 2026-08-16.** The runtime benchmark numbers below are still a
+> reasonable ballpark, but the codebase/tool-count rows are out of date (live
+> count is 22 CLI commands, ~55 MCP tools as of this note — see
+> `aiyoucli mcp tools`). Feature-coverage claims should be re-checked against
+> `../ROADMAP.md` rather than trusted at face value.
+
 ## Codebase Metrics
 
 | Metric | claude-flow v3 | aiyoucli | Ratio |
