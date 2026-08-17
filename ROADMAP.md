@@ -29,15 +29,71 @@ missing. They've since shipped — corrected here so nobody re-implements them:
 | Memory export/import | `aiyoucli memory export`/`memory import`, `memory_export`/`memory_import` MCP tools — shipped 2026-08-16 |
 | Fish/PowerShell completions | `aiyoucli completions fish\|powershell` — shipped 2026-08-16 |
 | `daemon`/`update` real implementations | No longer stubs — `daemon start\|status\|stop` (PID-file based), `update check\|install` — shipped 2026-08-16. Note: the daemon's task queue still has no default producer wired up (`WorkerDaemon.dispatch()` is available for future callers) |
+| `codebase trace --direction callers\|callees` | Fixed 2026-08-16 — was silently returning both directions; see "Confirmed bugs" #1 below for root cause |
+| HNSW index node leak on re-insert | Fixed 2026-08-16 in `aiyouvector-core` (`index/hnsw.rs::add()`) — see "Confirmed bugs" #2 below for root cause |
 
 ---
+
+## Confirmed bugs (found 2026-08-16, cross-checking [ruflo's changelog](https://github.com/ruvnet/ruflo/blob/main/CHANGELOG.md) for analogous fixed issues)
+
+Working order: #1 and #2 (below) are done; #3 (OIDC) has its CI-side prep
+done, blocked on one manual npmjs.com step by the account owner. A release
+covering all three follows once #3's manual step is either done or
+consciously deferred.
+
+1. ~~`aiyoucli codebase trace --direction callers|callees` silently returns
+   both directions instead of filtering.~~ **Fixed 2026-08-16** — see
+   "Already done" above. Root cause was a vocabulary mismatch, not the
+   `_ =>` wildcard itself being wrong: aiyoucli's public vocabulary
+   (`callers`/`callees`/`both`) never got translated to
+   `aiyouvector-codebase`'s internal `outbound`/`inbound` vocabulary before
+   reaching `trace_calls()`, so both fell through to its both-directions
+   wildcard. Fixed entirely within `aiyoucli` (`crates/aiyoucli-napi/src/codebase.rs::translate_direction()`)
+   — `aiyouvector`'s own vocabulary is used consistently by its other
+   internal callers and tests, so it was left alone.
+
+2. ~~HNSW index leaks a graph node on every re-insert of an existing vector
+   id.~~ **Fixed 2026-08-16** — see "Already done" above.
+   `index/flat.rs`'s `add()` uses a plain `HashMap::insert`, so re-inserting
+   an existing id already overwrote correctly there; `hnsw.rs`'s `add()`
+   always allocated a **new** `idx` and repointed `id_to_idx`/`vectors` to
+   it, but never retired the *old* `idx`'s node from the graph or from
+   `idx_to_id` — every repeated `memory store --id X` with the same `X`
+   leaked one orphaned graph node. Directly analogous to ruflo's fixed issue
+   #2775 ("memory store to existing key no longer dead-ends"), except
+   aiyoucli's failure mode was a silent leak rather than a hard error.
+   Fixed in `aiyouvector-core` by retiring the old mapping in `add()`
+   exactly like `remove()` already does, reusing the existing
+   rebuild-on-heavy-deletion logic to reclaim it. Verified via a new Rust
+   unit test asserting `deleted_count` stays bounded across repeated
+   re-inserts rather than growing without limit (not observable end-to-end
+   from the CLI — `count()`/`search()` were already correct even with the
+   bug, since the leak was internal to the HNSW graph structure).
+
+3. **Migrate npm publish to Trusted Publishing (OIDC)** — half done, one
+   manual step left. `permissions: id-token: write` was already present on
+   the `publish` job (it was needed for `--provenance`), and `repository.url`
+   in all 6 `package.json`s already matches `github.com/faugustdev/aiyoucli`
+   exactly — both prerequisites. Added `npm install -g npm@latest` to the
+   `publish` job (OIDC trusted publishing needs npm CLI ≥ 11.5.1; the
+   `node-version: 22` runner isn't guaranteed to bundle that). Deliberately
+   did **not** remove `secrets.NPM_TOKEN` — per npm's own docs, `npm publish`
+   tries OIDC first and falls back to the token automatically, so this is a
+   safe, zero-risk *preparation* step, not yet the full migration.
+   **Remaining, and only doable by the account owner**: on npmjs.com, for
+   each of the 6 `@aiyou-dev/*` packages, Settings → Trusted Publisher → add
+   GitHub Actions publisher with repository `aiyoucli`, workflow filename
+   `ci.yml`, no environment. Once all 6 are configured, `NODE_AUTH_TOKEN`/
+   `secrets.NPM_TOKEN` can be removed from the workflow and the secret
+   deleted from repo settings.
 
 ## Next up (small, low-risk — pick any, one PR each)
 
 Empty right now — the three items that were here (memory export/import, fish/
 powershell completions, real daemon/update) all shipped 2026-08-16, moved to
-"Already done" above. Pull the next batch from "Needs re-verification" below,
-or from `docs/RUFLO-V3-VS-AIYOUCLI.md`'s "Media prioridad" table.
+"Already done" above. Working the confirmed-bugs list above next; pull further
+batches from "Needs re-verification" below, or from
+`docs/RUFLO-V3-VS-AIYOUCLI.md`'s "Media prioridad" table.
 
 ## Needs re-verification before scoping
 

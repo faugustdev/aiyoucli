@@ -12,6 +12,15 @@ the fact.
 
 Nothing yet.
 
+## [1.6.1] — 2026-08-16
+
+### Fixed
+- `aiyoucli codebase trace --direction callers|callees` — both values silently returned the same result as `both` (the underlying `trace_calls()` speaks `outbound`/`inbound` internally; neither `callers` nor `callees` matched, so both fell through to the both-directions wildcard). Now translated correctly at the `aiyoucli-napi` boundary.
+- HNSW index (`aiyouvector-core`) leaked an orphaned graph node on every re-insert of an existing vector id (e.g. calling `memory store --id X` more than once). Now retires the old node the same way `remove()` already did, so the existing rebuild-on-heavy-deletion logic reclaims it.
+
+### Changed
+- CI: `publish` job now upgrades to the latest npm CLI before publishing, in preparation for npm Trusted Publishing (OIDC) — `secrets.NPM_TOKEN` stays in place as a fallback until the trusted publisher is registered on npmjs.com for all 6 packages (manual, account-owner-only step; see `ROADMAP.md`).
+
 ## [1.6.0] — 2026-08-16
 
 ### Added
@@ -101,7 +110,8 @@ Initial public release.
 - Path traversal, prototype pollution, and input validation hardening.
 - Vector memory persistence between CLI invocations.
 
-[Unreleased]: https://github.com/faugustdev/aiyoucli/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/faugustdev/aiyoucli/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/faugustdev/aiyoucli/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/faugustdev/aiyoucli/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/faugustdev/aiyoucli/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/faugustdev/aiyoucli/compare/v1.3.2...v1.4.0

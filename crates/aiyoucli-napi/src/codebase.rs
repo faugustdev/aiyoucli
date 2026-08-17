@@ -241,6 +241,21 @@ pub fn search(
     }
 }
 
+/// aiyoucli's public vocabulary (CLI flag, MCP tool input, docs) is
+/// callers/callees/both. aiyouvector-codebase's `trace_calls()` speaks its
+/// own outbound/inbound vocabulary internally (consistent across its own
+/// callers and tests, so we don't rename it there) and treats anything that
+/// isn't exactly "outbound" or "inbound" as "both". Without this
+/// translation, "callers" and "callees" both fell through to that wildcard
+/// and silently returned the same result as "both" — no error.
+fn translate_direction(direction: &str) -> &str {
+    match direction {
+        "callees" => "outbound",
+        "callers" => "inbound",
+        _ => direction, // "both", or anything unrecognized -> upstream's both-directions wildcard
+    }
+}
+
 pub fn trace_path(
     project: &str,
     function_name: &str,
@@ -248,7 +263,7 @@ pub fn trace_path(
     depth: usize,
 ) -> AResult<Vec<TraceResult>> {
     let graph = open_project(project)?;
-    graph.trace_calls(function_name, direction, depth)
+    graph.trace_calls(function_name, translate_direction(direction), depth)
 }
 
 /// NOT a git diff — counts files with a recorded hash for this project.
@@ -491,5 +506,15 @@ mod tests {
     fn detect_changes_reports_missing_project() {
         let err = detect_changes("definitely-not-a-real-project-xyz").unwrap_err();
         assert!(err.to_string().contains("not indexed"));
+    }
+
+    #[test]
+    fn translate_direction_maps_public_vocabulary_to_upstream() {
+        // The bug this guards against: "callers"/"callees" used to fall
+        // through untranslated and silently behave like "both".
+        assert_eq!(translate_direction("callees"), "outbound");
+        assert_eq!(translate_direction("callers"), "inbound");
+        assert_eq!(translate_direction("both"), "both");
+        assert_eq!(translate_direction("anything-else"), "anything-else");
     }
 }

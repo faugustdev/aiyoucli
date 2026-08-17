@@ -252,6 +252,16 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
+      # npm Trusted Publishing (OIDC) needs npm CLI >= 11.5.1. `id-token:
+      # write` above is already granted (it was already needed for
+      # --provenance). This is additive and safe either way: npm publish
+      # tries OIDC first and falls back to NODE_AUTH_TOKEN below when a
+      # package has no trusted publisher configured yet, so this doesn't
+      # change current behavior on its own — see ROADMAP.md for the
+      # remaining manual step (registering each package's trusted
+      # publisher on npmjs.com; only the account owner can do that).
+      - run: npm install -g npm@latest
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/
