@@ -16,12 +16,16 @@ Interactive project initialization. Creates `AGENTS.md`, writes default settings
 |---|---|
 | `--skip-skills` | Skip community skill installation |
 | `--with-mcp` | Also wire the MCP server (`.mcp.json` / opencode.json). **Off by default** — agents use the `aiyoucli` CLI directly via shell, avoiding the standing token cost of loading ~60 MCP tool schemas into every turn |
+| `--with-hooks` | Wire Claude Code PreToolUse/PostToolUse hooks into `.claude/settings.json` for `Edit\|Write\|MultiEdit`. **Off by default** — OpenCode already gets lifecycle hooks via `@aiyou-dev/team`; this brings Claude Code to parity |
+| `--with-agents` | Write `.claude/agents/*.md` for the 8 aiyou-team agents so Claude Code's `task` tool can dispatch to them. **Off by default** — OpenCode already gets the agents via the `@aiyou-dev/team` plugin entry in `opencode.json` |
 | `--format json` | Output results as JSON |
 
 ```bash
 aiyoucli init
 aiyoucli init --skip-skills
 aiyoucli init --with-mcp --force   # opt into MCP (e.g. for a shell-less client like Claude Desktop)
+aiyoucli init --tool claude --with-agents   # opt into Claude Code agent delegation
+aiyoucli init --tool claude --with-hooks --with-agents   # full Claude Code wiring parity
 ```
 
 ### `aiyoucli status`

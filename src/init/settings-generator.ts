@@ -16,6 +16,7 @@ import { join, basename, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { generateStatuslineScript } from "../statusline/generator.js";
 import { distillMarkdown } from "../napi/index.js";
+import { AGENT_DEFS, buildClaudeAgentFile, getAgentDir } from "./claude-agents.js";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -270,8 +271,8 @@ function buildClaudeMd(name: string, author: { name: string; email: string }, wi
 
 Commits: ${author.name} <${author.email}>
 ${mcpLine}
-Team: Use \`task\` tool with \`subagent_type\` to delegate to aiyou-team agents
-  - coding-leader, coding-executor, codebase-explorer, reviewer, web-researcher, principal-advisor, multimodal-looker
+Team: Use \`task\` tool with \`subagent_type\` to delegate to aiyou-team agents (run \`aiyoucli init --with-agents\` to enable — agents work once .claude/agents/*.md exist)
+  - coding-leader, coordination-leader, coding-executor, codebase-explorer, web-researcher, reviewer, principal-advisor, multimodal-looker
 Discovery: \`aiyoucli status\` first (or \`capabilities\` if MCP is enabled)
 Search: \`aiyoucli codebase search|trace|query\` over the knowledge graph instead of reading many files
 Build: npm install && npm run build
@@ -285,7 +286,8 @@ function generateClaude(
   author: { name: string; email: string },
   force: boolean,
   withMcp: boolean,
-  withHooks: boolean
+  withHooks: boolean,
+  withAgents: boolean
 ): FileWriteResult[] {
   const results: FileWriteResult[] = [];
 
@@ -314,6 +316,46 @@ function generateClaude(
     writeTextIfNotExists(join(projectRoot, "CLAUDE.md"), buildClaudeMd(name, author, withMcp))
   );
 
+  // .claude/agents/*.md — opt-in via `--with-agents`. Writes one markdown
+  // file per aiyou-team agent so Claude Code's `task` tool can dispatch to
+  // them. OpenCode already gets this via the `@aiyou-dev/team` plugin entry.
+  if (withAgents) {
+    results.push(...generateClaudeAgents(projectRoot, force));
+  }
+
+  return results;
+}
+
+/**
+ * Write `.claude/agents/<name>.md` for each aiyou-team agent. Mirrors the
+ * `writeTextIfNotExists` pattern used by CLAUDE.md — first run creates, re-run
+ * skips. `--force` overwrites (returns "updated").
+ */
+function generateClaudeAgents(projectRoot: string, force: boolean): FileWriteResult[] {
+  const agentDir = getAgentDir(projectRoot);
+  mkdirSync(agentDir, { recursive: true });
+
+  const results: FileWriteResult[] = [];
+  for (const def of AGENT_DEFS) {
+    const filePath = join(agentDir, `${def.name}.md`);
+    const content = buildClaudeAgentFile(def);
+
+    if (force && existsSync(filePath)) {
+      const previousBytes = statSafe(filePath);
+      writeFileSync(filePath, content, "utf-8");
+      results.push({
+        path: filePath,
+        status: "updated",
+        diff: { previousBytes, newBytes: statSafe(filePath) },
+      });
+    } else if (force) {
+      writeFileSync(filePath, content, "utf-8");
+      results.push({ path: filePath, status: "created" });
+    } else {
+      // writeTextIfNotExists returns "skipped" if the file already exists.
+      results.push(writeTextIfNotExists(filePath, content));
+    }
+  }
   return results;
 }
 
@@ -449,6 +491,10 @@ function generateCommon(projectRoot: string): FileWriteResult[] {
  * @param withHooks    Emit Claude Code PreToolUse/PostToolUse hooks into `.claude/settings.json`
  *                     for `Edit|Write|MultiEdit`. Disabled by default — OpenCode already gets
  *                     lifecycle hooks via `@aiyou-dev/team`. See `aiyoucli init --with-hooks`.
+ * @param withAgents   Emit `.claude/agents/<name>.md` for the 8 aiyou-team agents so Claude Code's
+ *                     `task` tool can dispatch to them. Disabled by default — OpenCode already gets
+ *                     these agents via the `@aiyou-dev/team` plugin entry in `opencode.json`.
+ *                     See `aiyoucli init --with-agents`.
  * @returns Array of write results (created / merged / updated / skipped).
  */
 export async function generateSettings(
@@ -456,7 +502,8 @@ export async function generateSettings(
   targets?: ToolTarget[],
   force = false,
   withMcp = false,
-  withHooks = false
+  withHooks = false,
+  withAgents = false
 ): Promise<FileWriteResult[]> {
   const effectiveTargets: ToolTarget[] = targets ?? ["claude", "gemini", "opencode"];
   const name = detectProjectName(projectRoot);
@@ -466,7 +513,7 @@ export async function generateSettings(
   for (const target of effectiveTargets) {
     switch (target) {
       case "claude":
-        results.push(...generateClaude(projectRoot, name, author, force, withMcp, withHooks));
+        results.push(...generateClaude(projectRoot, name, author, force, withMcp, withHooks, withAgents));
         break;
       case "gemini":
         results.push(...generateGemini(projectRoot, name, author, withMcp));

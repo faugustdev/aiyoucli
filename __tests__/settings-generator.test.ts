@@ -330,3 +330,134 @@ describe("generateSettings — opencode target only", () => {
     expect(paths.some((p) => p.endsWith("settings.json"))).toBe(false);
   });
 });
+
+describe("generateSettings — .claude/agents/*.md (--with-agents)", () => {
+  const AGENT_NAMES = [
+    "coding-leader",
+    "coordination-leader",
+    "coding-executor",
+    "codebase-explorer",
+    "web-researcher",
+    "reviewer",
+    "principal-advisor",
+    "multimodal-looker",
+  ];
+
+  it("does NOT write .claude/agents/ when withAgents is omitted (default off)", async () => {
+    const results = await generateSettings(tmpDir, ["claude"]);
+    expect(existsSync(join(tmpDir, ".claude", "agents"))).toBe(false);
+    expect(results.some((r) => r.path.includes(".claude" + "/agents/"))).toBe(false);
+  });
+
+  it("creates all 8 .claude/agents/*.md files when withAgents=true", async () => {
+    const results = await generateSettings(tmpDir, ["claude"], false, false, false, true);
+
+    for (const name of AGENT_NAMES) {
+      const result = results.find((r) => r.path.endsWith(`.claude/agents/${name}.md`));
+      expect(result, `missing result for ${name}`).toBeDefined();
+      expect(result!.status).toBe("created");
+    }
+
+    // Each file has valid YAML frontmatter with the expected name
+    for (const name of AGENT_NAMES) {
+      const filePath = join(tmpDir, ".claude", "agents", `${name}.md`);
+      const content = readFileSync(filePath, "utf-8");
+      expect(content.startsWith("---\n")).toBe(true);
+      expect(content).toContain(`name: ${name}`);
+      // description is a single line, so a newline must follow it
+      expect(content).toMatch(/^description: .+$/m);
+      expect(content).toContain("tools: ");
+      expect(content).toContain("model: ");
+      // The body sits after the closing `---`
+      expect(content).toContain("---");
+    }
+  });
+
+  it("applies tier-based model mapping (coding-leader → opus, codebase-explorer → haiku)", async () => {
+    await generateSettings(tmpDir, ["claude"], false, false, false, true);
+
+    const codingLeader = readFileSync(join(tmpDir, ".claude", "agents", "coding-leader.md"), "utf-8");
+    expect(codingLeader).toContain("model: opus");
+
+    const coordinationLeader = readFileSync(join(tmpDir, ".claude", "agents", "coordination-leader.md"), "utf-8");
+    expect(coordinationLeader).toContain("model: sonnet");
+
+    const codingExecutor = readFileSync(join(tmpDir, ".claude", "agents", "coding-executor.md"), "utf-8");
+    expect(codingExecutor).toContain("model: opus");
+
+    const codebaseExplorer = readFileSync(join(tmpDir, ".claude", "agents", "codebase-explorer.md"), "utf-8");
+    expect(codebaseExplorer).toContain("model: haiku");
+
+    const webResearcher = readFileSync(join(tmpDir, ".claude", "agents", "web-researcher.md"), "utf-8");
+    expect(webResearcher).toContain("model: sonnet");
+
+    const reviewer = readFileSync(join(tmpDir, ".claude", "agents", "reviewer.md"), "utf-8");
+    expect(reviewer).toContain("model: sonnet");
+
+    const principalAdvisor = readFileSync(join(tmpDir, ".claude", "agents", "principal-advisor.md"), "utf-8");
+    expect(principalAdvisor).toContain("model: sonnet");
+
+    const multimodalLooker = readFileSync(join(tmpDir, ".claude", "agents", "multimodal-looker.md"), "utf-8");
+    expect(multimodalLooker).toContain("model: sonnet");
+  });
+
+  it("respects tools: allowlist — coding-executor has Edit/Write/Bash but codebase-explorer does not", async () => {
+    await generateSettings(tmpDir, ["claude"], false, false, false, true);
+
+    // Extract the `tools:` line from the YAML frontmatter only (the body may
+    // contain the word "Task" in prose context).
+    function toolsLine(name: string): string {
+      const content = readFileSync(join(tmpDir, ".claude", "agents", `${name}.md`), "utf-8");
+      const match = content.match(/^tools: (.+)$/m);
+      return match ? match[1] : "";
+    }
+
+    const executorTools = toolsLine("coding-executor").split(",").map((s) => s.trim());
+    expect(executorTools).toEqual(["Read", "Edit", "Write", "Bash", "Glob", "Grep"]);
+
+    const explorerTools = toolsLine("codebase-explorer").split(",").map((s) => s.trim());
+    expect(explorerTools).toEqual(["Read", "Glob", "Grep"]);
+    expect(explorerTools).not.toContain("Edit");
+    expect(explorerTools).not.toContain("Write");
+    expect(explorerTools).not.toContain("Bash");
+    expect(explorerTools).not.toContain("Task");
+
+    // coding-leader is the orchestrator — it gets Task for delegation
+    const leaderTools = toolsLine("coding-leader").split(",").map((s) => s.trim());
+    expect(leaderTools).toContain("Task");
+
+    // web-researcher is the only one with WebFetch/WebSearch
+    const researcherTools = toolsLine("web-researcher").split(",").map((s) => s.trim());
+    expect(researcherTools).toContain("WebFetch");
+    expect(researcherTools).toContain("WebSearch");
+  });
+
+  it("is idempotent — re-running withAgents=true returns skipped for all 8", async () => {
+    await generateSettings(tmpDir, ["claude"], false, false, false, true);
+    const secondRun = await generateSettings(tmpDir, ["claude"], false, false, false, true);
+
+    for (const name of AGENT_NAMES) {
+      const result = secondRun.find((r) => r.path.endsWith(`.claude/agents/${name}.md`));
+      expect(result, `missing second-run result for ${name}`).toBeDefined();
+      expect(result!.status).toBe("skipped");
+    }
+  });
+
+  it("force=true overwrites existing agent files", async () => {
+    // First run — creates
+    await generateSettings(tmpDir, ["claude"], false, false, false, true);
+
+    // Hand-edit the leader file
+    const leaderPath = join(tmpDir, ".claude", "agents", "coding-leader.md");
+    writeFileSync(leaderPath, "# user-edited content, not generated\n", "utf-8");
+
+    // Second run with force=true — should overwrite
+    const results = await generateSettings(tmpDir, ["claude"], true, false, false, true);
+    const leaderResult = results.find((r) => r.path.endsWith(".claude/agents/coding-leader.md"));
+    expect(leaderResult!.status).toBe("updated");
+
+    const content = readFileSync(leaderPath, "utf-8");
+    expect(content).not.toContain("# user-edited content, not generated");
+    expect(content).toContain("name: coding-leader");
+  });
+});

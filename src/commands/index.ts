@@ -136,6 +136,7 @@ const initCommand: Command = {
     { name: "tool", short: "t", description: "Tools to configure: claude, gemini, opencode, all (default: all)", type: "string" },
     { name: "with-mcp", description: "Also wire the MCP server (.mcp.json / opencode.json). Disabled by default — agents use the aiyoucli CLI directly via shell, avoiding the standing token cost of ~60 MCP tool schemas", type: "boolean" },
     { name: "with-hooks", description: "Wire Claude Code PreToolUse/PostToolUse hooks into .claude/settings.json for Edit|Write|MultiEdit (forwarded to `aiyoucli hooks pre-task` / `post-task`). Disabled by default — OpenCode already gets lifecycle hooks via @aiyou-dev/team; this brings Claude Code to parity when opted in", type: "boolean" },
+    { name: "with-agents", description: "Write .claude/agents/*.md for the 8 aiyou-team agents so Claude Code's `task` tool can delegate to them. Disabled by default — OpenCode already gets the agents via the @aiyou-dev/team plugin entry in opencode.json; this brings Claude Code to parity when opted in", type: "boolean" },
   ],
   examples: [
     { command: "aiyoucli init", description: "Initialize with full 4-phase bootstrap (wire + write + warm + verify)" },
@@ -144,6 +145,7 @@ const initCommand: Command = {
     { command: "aiyoucli init --tool all", description: "Initialize for all supported tools" },
     { command: "aiyoucli init --skip-verify", description: "Skip Phase 4 verification (faster init)" },
     { command: "aiyoucli init --with-mcp", description: "Also wire the MCP server (off by default)" },
+    { command: "aiyoucli init --tool claude --with-agents", description: "Initialize Claude Code with the 8 aiyou-team agent identities wired into .claude/agents/" },
   ],
   action: async (ctx) => {
     const cwd = ctx.cwd;
@@ -169,6 +171,7 @@ const initCommand: Command = {
     const fileResults: FileWriteResult[] = [];
     const withMcp = ctx.flags.withMcp as boolean;
     const withHooks = ctx.flags.withHooks as boolean;
+    const withAgents = ctx.flags.withAgents as boolean;
 
     // 1. Generate AGENTS.md (always)
     try {
@@ -203,7 +206,7 @@ const initCommand: Command = {
 
     // 2. Generate tool-specific configs
     try {
-      const settingsResults = await generateSettings(cwd, targets, ctx.flags.force as boolean, withMcp, withHooks);
+      const settingsResults = await generateSettings(cwd, targets, ctx.flags.force as boolean, withMcp, withHooks, withAgents);
       fileResults.push(...settingsResults);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

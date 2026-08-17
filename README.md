@@ -93,6 +93,9 @@ aiyoucli gcc                           Git context (branch, status, commits, dif
 
 Agent orchestration is provided by the `@aiyou-dev/team` OpenCode plugin. Use `aiyoucli setup` and `aiyoucli team` to install and manage it.
 
+- **OpenCode** — `plugin: ["@aiyou-dev/team"]` in `opencode.json` registers the 8 agents automatically when OpenCode loads.
+- **Claude Code** — `aiyoucli init --tool claude --with-agents` writes `.claude/agents/*.md` for all 8 agents so Claude Code's `task` tool can dispatch to them. Off by default.
+
 ### Intelligence
 
 ```
@@ -210,6 +213,27 @@ aiyou-team ships as a first-class OpenCode plugin:
   "plugin": ["@aiyou-dev/team"]
 }
 ```
+
+### Claude Code
+
+Claude Code has no plugin mechanism like OpenCode's, so aiyoucli writes the 8 agent identities as project files at `init` time:
+
+```bash
+aiyoucli init --tool claude --with-agents
+```
+
+This writes `.claude/agents/<name>.md` for each of the 8 agents:
+
+- `coding-leader` (opus) — execution-first orchestrator
+- `coordination-leader` (sonnet) — plan-first coordinator
+- `coding-executor` (opus) — direct implementation
+- `codebase-explorer` (haiku) — read-only code search
+- `web-researcher` (sonnet) — external docs research
+- `reviewer` (sonnet) — code review gate
+- `principal-advisor` (sonnet) — strategic advisory
+- `multimodal-looker` (sonnet) — visual interpretation
+
+Each file has a YAML frontmatter (`name`, `description`, `tools`, `model`) and a hand-authored system prompt body. Re-running `init` is a no-op (idempotent); use `--force` to refresh.
 
 ### i18n
 
