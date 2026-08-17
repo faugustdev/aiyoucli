@@ -10,6 +10,10 @@ the fact.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.6.3] — 2026-08-17
+
 ### Added
 - `aiyoucli init --with-hooks` — opt-in PreToolUse/PostToolUse hooks in `.claude/settings.json` for `Edit|Write|MultiEdit`. Brings Claude Code to parity with OpenCode's `@aiyou-dev/team` lifecycle coverage (routing recommendation before edit, Q-table learning after edit). Off by default to match the `--with-mcp` precedent; existing init users won't see new hooks on re-init. New CLI flags: `pre-task --file <path> --edit-kind <mod|new|delete>` and `post-task --file <path>` (agent defaults to `claude` for Claude Code; set `AIYOUCLI_AUTO_AGENT` to override).
 - `aiyoucli init --with-agents` — opt-in writing of 8 `.claude/agents/*.md` files (`coding-leader`, `coordination-leader`, `coding-executor`, `codebase-explorer`, `web-researcher`, `reviewer`, `principal-advisor`, `multimodal-looker`) so Claude Code's `task` tool can dispatch to aiyou-team agents. Off by default to mirror `--with-mcp`/`--with-hooks`. Fixes the user-reported "agents work in OpenCode but not in Claude Code" — Claude Code has no equivalent of OpenCode's `plugin:` field, so the agent identities must be written as project files. Each agent gets a tier-mapped model (`flagship → opus`, `strong/balanced → sonnet`, `fast → haiku`) and a per-agent tool allowlist derived from the upstream `@aiyou-dev/team` `requestedTools` (OpenCode-only names like `look_at`, `todowrite`, `delegate_status` dropped). Idempotent: `writeTextIfNotExists` on re-run; `--force` overwrites.
