@@ -36,10 +36,9 @@ missing. They've since shipped — corrected here so nobody re-implements them:
 
 ## Confirmed bugs (found 2026-08-16, cross-checking [ruflo's changelog](https://github.com/ruvnet/ruflo/blob/main/CHANGELOG.md) for analogous fixed issues)
 
-Working order: #1 and #2 (below) are done; #3 (OIDC) has its CI-side prep
-done, blocked on one manual npmjs.com step by the account owner. A release
-covering all three follows once #3's manual step is either done or
-consciously deferred.
+All three items below are done as of 2026-08-16 — kept here (rather than
+moved to "Already done" above) since they're bugfixes with root-cause
+writeups worth keeping intact, not gap-doc corrections.
 
 1. ~~`aiyoucli codebase trace --direction callers|callees` silently returns
    both directions instead of filtering.~~ **Fixed 2026-08-16** — see
@@ -70,22 +69,17 @@ consciously deferred.
    from the CLI — `count()`/`search()` were already correct even with the
    bug, since the leak was internal to the HNSW graph structure).
 
-3. **Migrate npm publish to Trusted Publishing (OIDC)** — half done, one
-   manual step left. `permissions: id-token: write` was already present on
-   the `publish` job (it was needed for `--provenance`), and `repository.url`
-   in all 6 `package.json`s already matches `github.com/faugustdev/aiyoucli`
-   exactly — both prerequisites. Added `npm install -g npm@latest` to the
-   `publish` job (OIDC trusted publishing needs npm CLI ≥ 11.5.1; the
-   `node-version: 22` runner isn't guaranteed to bundle that). Deliberately
-   did **not** remove `secrets.NPM_TOKEN` — per npm's own docs, `npm publish`
-   tries OIDC first and falls back to the token automatically, so this is a
-   safe, zero-risk *preparation* step, not yet the full migration.
-   **Remaining, and only doable by the account owner**: on npmjs.com, for
-   each of the 6 `@aiyou-dev/*` packages, Settings → Trusted Publisher → add
-   GitHub Actions publisher with repository `aiyoucli`, workflow filename
-   `ci.yml`, no environment. Once all 6 are configured, `NODE_AUTH_TOKEN`/
-   `secrets.NPM_TOKEN` can be removed from the workflow and the secret
-   deleted from repo settings.
+3. ~~Migrate npm publish to Trusted Publishing (OIDC).~~ **Done 2026-08-16.**
+   Account owner registered the trusted publisher on npmjs.com for all 6
+   `@aiyou-dev/*` packages (repo `aiyoucli`, workflow `ci.yml`, no
+   environment); `NODE_AUTH_TOKEN`/`secrets.NPM_TOKEN` removed from both
+   `publish` steps in `.github/workflows/ci.yml` — `npm publish` now
+   authenticates purely via the `id-token: write` OIDC token.
+   **Not yet done, optional cleanup**: the `NPM_TOKEN` secret itself still
+   physically exists in repo settings (harmless now that nothing reads it —
+   left in place as an easy one-commit revert path until a real
+   OIDC-authenticated publish has been observed to succeed in the Actions
+   log for a tagged release; delete it afterward).
 
 ## Next up (small, low-risk — pick any, one PR each)
 

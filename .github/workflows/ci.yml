@@ -252,14 +252,12 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      # npm Trusted Publishing (OIDC) needs npm CLI >= 11.5.1. `id-token:
-      # write` above is already granted (it was already needed for
-      # --provenance). This is additive and safe either way: npm publish
-      # tries OIDC first and falls back to NODE_AUTH_TOKEN below when a
-      # package has no trusted publisher configured yet, so this doesn't
-      # change current behavior on its own — see ROADMAP.md for the
-      # remaining manual step (registering each package's trusted
-      # publisher on npmjs.com; only the account owner can do that).
+      # npm Trusted Publishing (OIDC): all 6 @aiyou-dev/* packages have a
+      # trusted publisher registered on npmjs.com for this repo/workflow
+      # (repo faugustdev/aiyoucli, workflow ci.yml, no environment). `npm
+      # publish` below authenticates via the `id-token: write` OIDC token
+      # (permission set above) — no NPM_TOKEN secret needed anymore. Needs
+      # npm CLI >= 11.5.1, hence the upgrade.
       - run: npm install -g npm@latest
 
       - uses: actions/download-artifact@v4
@@ -305,8 +303,6 @@ jobs:
               fi
             fi
           done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @aiyou-dev/cli
         run: |
@@ -317,7 +313,5 @@ jobs:
           else
             npm publish --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
 

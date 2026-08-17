@@ -12,6 +12,11 @@ the fact.
 
 Nothing yet.
 
+## [1.6.2] — 2026-08-16
+
+### Changed
+- CI: npm publish now authenticates via Trusted Publishing (OIDC) only — `secrets.NPM_TOKEN`/`NODE_AUTH_TOKEN` removed from both `publish` steps in `.github/workflows/ci.yml`, now that the trusted publisher is registered on npmjs.com for all 6 `@aiyou-dev/*` packages. The `NPM_TOKEN` secret itself is left in repo settings for now as an easy revert path until a tagged release has been observed to publish successfully this way — this release is that observation.
+
 ## [1.6.1] — 2026-08-16
 
 ### Fixed
@@ -110,7 +115,8 @@ Initial public release.
 - Path traversal, prototype pollution, and input validation hardening.
 - Vector memory persistence between CLI invocations.
 
-[Unreleased]: https://github.com/faugustdev/aiyoucli/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/faugustdev/aiyoucli/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/faugustdev/aiyoucli/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/faugustdev/aiyoucli/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/faugustdev/aiyoucli/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/faugustdev/aiyoucli/compare/v1.4.0...v1.5.0
