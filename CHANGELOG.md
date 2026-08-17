@@ -10,7 +10,8 @@ the fact.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- `aiyoucli init --with-hooks` — opt-in PreToolUse/PostToolUse hooks in `.claude/settings.json` for `Edit|Write|MultiEdit`. Brings Claude Code to parity with OpenCode's `@aiyou-dev/team` lifecycle coverage (routing recommendation before edit, Q-table learning after edit). Off by default to match the `--with-mcp` precedent; existing init users won't see new hooks on re-init. New CLI flags: `pre-task --file <path> --edit-kind <mod|new|delete>` and `post-task --file <path>` (agent defaults to `claude` for Claude Code; set `AIYOUCLI_AUTO_AGENT` to override).
 
 ## [1.6.2] — 2026-08-16
 

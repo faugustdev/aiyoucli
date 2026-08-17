@@ -207,6 +207,77 @@ describe("generateSettings — .claude/settings.json merge", () => {
   });
 });
 
+describe("generateSettings — .claude/settings.json hooks (--with-hooks)", () => {
+  it("does NOT emit hooks block when withHooks is omitted (default off)", async () => {
+    await generateSettings(tmpDir, ["claude"]);
+    const content = JSON.parse(readFileSync(join(tmpDir, ".claude", "settings.json"), "utf-8"));
+    expect(content.hooks).toBeUndefined();
+  });
+
+  it("emits PreToolUse/PostToolUse hooks when withHooks=true", async () => {
+    await generateSettings(tmpDir, ["claude"], false, false, true);
+    const content = JSON.parse(readFileSync(join(tmpDir, ".claude", "settings.json"), "utf-8"));
+    expect(content.hooks.PreToolUse).toHaveLength(1);
+    expect(content.hooks.PreToolUse[0].matcher).toBe("Edit|Write|MultiEdit");
+    // The inline node -e script shell-outs to `aiyoucli hooks pre-task` — the
+    // substring `"pre-task"` appears literally in the args array, and
+    // `"aiyoucli"` appears literally in the spawnSync call. Both must be there.
+    const preCmd = content.hooks.PreToolUse[0].hooks[0].command;
+    expect(preCmd).toContain("pre-task");
+    expect(preCmd).toContain("aiyoucli");
+    expect(preCmd).not.toContain("AIYOUCLI_AUTO_AGENT"); // only in post
+    expect(content.hooks.PreToolUse[0].hooks[0].timeout).toBe(15);
+    expect(content.hooks.PostToolUse[0].matcher).toBe("Edit|Write|MultiEdit");
+    const postCmd = content.hooks.PostToolUse[0].hooks[0].command;
+    expect(postCmd).toContain("post-task");
+    expect(postCmd).toContain("aiyoucli");
+    expect(postCmd).toContain("AIYOUCLI_AUTO_AGENT");
+    expect(content.hooks.PostToolUse[0].hooks[0].timeout).toBe(15);
+    // statusLine preserved alongside the new hooks block
+    expect(content.statusLine.command).toBe("aiyoucli statusline --compact");
+  });
+
+  it("merges hooks with existing user-written PreToolUse (no clobber)", async () => {
+    const settingsPath = join(tmpDir, ".claude", "settings.json");
+    mkdirSync(join(tmpDir, ".claude"), { recursive: true });
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            { matcher: "*", hooks: [{ type: "command", command: "user-formatter.sh", timeout: 10 }] },
+          ],
+        },
+      }, null, 2) + "\n",
+      "utf-8"
+    );
+
+    await generateSettings(tmpDir, ["claude"], false, false, true);
+    const content = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    // User's formatter hook preserved AND aiyoucli entry appended
+    expect(content.hooks.PreToolUse.some((h: { hooks: { command: string }[] }) =>
+      h.hooks[0].command.includes("user-formatter")
+    )).toBe(true);
+    expect(content.hooks.PreToolUse.some((h: { hooks: { command: string }[] }) =>
+      h.hooks[0].command.includes("pre-task") &&
+      h.hooks[0].command.includes("aiyoucli")
+    )).toBe(true);
+    expect(content.hooks.PostToolUse).toHaveLength(1);
+  });
+
+  it("is idempotent — re-running withHooks=true does not duplicate hooks", async () => {
+    await generateSettings(tmpDir, ["claude"], false, false, true);
+    await generateSettings(tmpDir, ["claude"], false, false, true);
+    const content = JSON.parse(readFileSync(join(tmpDir, ".claude", "settings.json"), "utf-8"));
+    // deepMerge dedups by JSON.stringify — exactly one PreToolUse entry from us
+    expect(content.hooks.PreToolUse.filter((h: { hooks: { command: string }[] }) =>
+      h.hooks[0].command.includes("pre-task") &&
+      h.hooks[0].command.includes("aiyoucli")
+    )).toHaveLength(1);
+    expect(content.hooks.PostToolUse).toHaveLength(1);
+  });
+});
+
 describe("generateSettings — docs (CLAUDE.md / OPENCODE.md / GEMINI.md)", () => {
   it("does not overwrite existing CLAUDE.md (preserves user content)", async () => {
     const claudePath = join(tmpDir, "CLAUDE.md");

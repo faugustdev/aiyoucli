@@ -198,11 +198,66 @@ function buildMcpJson(): object {
 
 // ── Claude Code ─────────────────────────────────────────────────
 
-function buildClaudeSettings(): object {
-  return {
+function buildClaudeSettings(withHooks: boolean): object {
+  const base = {
     statusLine: {
       type: "command",
       command: "aiyoucli statusline --compact",
+    },
+  };
+  if (!withHooks) return base;
+  return {
+    ...base,
+    // Wire PreToolUse/PostToolUse hooks for Edit|Write|MultiEdit so Claude
+    // Code gets the same lifecycle coverage that OpenCode already gets via
+    // the @aiyou-dev/team plugin (tool.execute.before/after). Each hook is
+    // an inline `node -e` script that reads Claude Code's JSON stdin payload,
+    // extracts tool_name + tool_input.file_path, and shells out to the
+    // existing `aiyoucli hooks pre-task` / `aiyoucli hooks post-task` CLI
+    // subcommands — those already wire to hooks_pre_task/hooks_post_task MCP
+    // tools, which run routing and persist the Q-table. Exit code 0 always
+    // (informational — does NOT block the Edit; matches hooks_pre_task's
+    // existing non-blocking semantics).
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Edit|Write|MultiEdit",
+          hooks: [
+            {
+              type: "command",
+              command:
+                "node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')||'{}');" +
+                "const f=(d.tool_input&&d.tool_input.file_path)||'';" +
+                "const args=['hooks','pre-task','--description',d.tool_name||'edit'];" +
+                "if(f){args.push('--file',f)}" +
+                "if(d.tool_input&&d.tool_input.old_string!==undefined){args.push('--edit-kind','mod')}" +
+                "else if(d.tool_input&&d.tool_input.content!==undefined){args.push('--edit-kind','new')}" +
+                "const{spawnSync}=require('child_process');" +
+                "const r=spawnSync('aiyoucli',args,{stdio:'inherit'});" +
+                "process.exit(r.status||0)\"",
+              timeout: 15,
+            },
+          ],
+        },
+      ],
+      PostToolUse: [
+        {
+          matcher: "Edit|Write|MultiEdit",
+          hooks: [
+            {
+              type: "command",
+              command:
+                "node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')||'{}');" +
+                "const args=['hooks','post-task','--description',d.tool_name||'edit'," +
+                "'--agent',(process.env.AIYOUCLI_AUTO_AGENT||'claude'),'--success'];" +
+                "if(d.tool_input&&d.tool_input.file_path)args.push('--file',d.tool_input.file_path);" +
+                "const{spawnSync}=require('child_process');" +
+                "spawnSync('aiyoucli',args,{stdio:'inherit'})\"",
+              timeout: 15,
+            },
+          ],
+        },
+      ],
     },
   };
 }
@@ -229,7 +284,8 @@ function generateClaude(
   name: string,
   author: { name: string; email: string },
   force: boolean,
-  withMcp: boolean
+  withMcp: boolean,
+  withHooks: boolean
 ): FileWriteResult[] {
   const results: FileWriteResult[] = [];
 
@@ -242,11 +298,13 @@ function generateClaude(
     );
   }
 
-  // .claude/settings.json — MERGE (preserve user's statusLine if present)
+  // .claude/settings.json — MERGE (preserve user's statusLine if present;
+  // deepMerge deduplicates the hooks.PreToolUse array by JSON.stringify so
+  // re-running `init --with-hooks` does NOT double up the entries).
   results.push(
     mergeJsonFile(
       join(projectRoot, ".claude", "settings.json"),
-      buildClaudeSettings() as Record<string, unknown>,
+      buildClaudeSettings(withHooks) as Record<string, unknown>,
       { force }
     )
   );
@@ -388,13 +446,17 @@ function generateCommon(projectRoot: string): FileWriteResult[] {
  * @param withMcp      Wire up the MCP server (`.mcp.json` / opencode.json `mcp.aiyoucli.enabled`).
  *                     Disabled by default — see `aiyoucli init --with-mcp`: agents use the CLI
  *                     via shell instead, avoiding the standing token cost of ~60 MCP tool schemas.
+ * @param withHooks    Emit Claude Code PreToolUse/PostToolUse hooks into `.claude/settings.json`
+ *                     for `Edit|Write|MultiEdit`. Disabled by default — OpenCode already gets
+ *                     lifecycle hooks via `@aiyou-dev/team`. See `aiyoucli init --with-hooks`.
  * @returns Array of write results (created / merged / updated / skipped).
  */
 export async function generateSettings(
   projectRoot: string,
   targets?: ToolTarget[],
   force = false,
-  withMcp = false
+  withMcp = false,
+  withHooks = false
 ): Promise<FileWriteResult[]> {
   const effectiveTargets: ToolTarget[] = targets ?? ["claude", "gemini", "opencode"];
   const name = detectProjectName(projectRoot);
@@ -404,7 +466,7 @@ export async function generateSettings(
   for (const target of effectiveTargets) {
     switch (target) {
       case "claude":
-        results.push(...generateClaude(projectRoot, name, author, force, withMcp));
+        results.push(...generateClaude(projectRoot, name, author, force, withMcp, withHooks));
         break;
       case "gemini":
         results.push(...generateGemini(projectRoot, name, author, withMcp));

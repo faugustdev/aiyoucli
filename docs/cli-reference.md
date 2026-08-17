@@ -93,9 +93,13 @@ Run pre-task hooks. Returns routing recommendation before starting work.
 | Option | Description | Required |
 |---|---|---|
 | `--description <d>` | Task description | Yes |
+| `--file <path>`, `-f` | File path (from Claude Code `tool_input.file_path`); appended to the description before routing | No |
+| `--edit-kind <mod\|new\|delete>`, `-k` | Edit classification; appended to the description in parens | No |
 
 ```bash
 aiyoucli hooks pre-task --description "implement caching layer"
+# Claude Code PreToolUse hook fires automatically when --with-hooks is enabled:
+aiyoucli hooks pre-task --description Edit --file src/cache.ts --edit-kind mod
 ```
 
 ### `aiyoucli hooks post-task`
@@ -105,11 +109,14 @@ Run post-task hooks. Records task outcome for learning and persists the Q-table.
 | Option | Description | Required |
 |---|---|---|
 | `--description <d>` | Task description | Yes |
-| `--agent <type>` | Agent type that was used | Yes |
-| `--success` | Whether the task succeeded | Yes |
+| `--agent <type>`, `-a` | Agent type that was used. Defaults to `claude` (the Claude Code PostToolUse hook sentinel). Override via `--agent` or set `AIYOUCLI_AUTO_AGENT` in the environment | No |
+| `--success`, `-s` | Whether the task succeeded. Defaults to `true` (the PostToolUse hook assumes success — `tool_result` is too tool-specific to parse reliably) | No |
+| `--file <path>`, `-f` | Optional file context (from Claude Code `tool_input.file_path`); appended to the description | No |
 
 ```bash
 aiyoucli hooks post-task --description "implement caching layer" --agent coder --success
+# Claude Code PostToolUse hook fires automatically when --with-hooks is enabled:
+aiyoucli hooks post-task --description Edit --file src/cache.ts
 ```
 
 ### `aiyoucli hooks stats`

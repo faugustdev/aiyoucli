@@ -135,6 +135,7 @@ const initCommand: Command = {
     { name: "skip-watcher", description: "Skip aiyouvector daemon watch hook (Phase 3.11)", type: "boolean" },
     { name: "tool", short: "t", description: "Tools to configure: claude, gemini, opencode, all (default: all)", type: "string" },
     { name: "with-mcp", description: "Also wire the MCP server (.mcp.json / opencode.json). Disabled by default — agents use the aiyoucli CLI directly via shell, avoiding the standing token cost of ~60 MCP tool schemas", type: "boolean" },
+    { name: "with-hooks", description: "Wire Claude Code PreToolUse/PostToolUse hooks into .claude/settings.json for Edit|Write|MultiEdit (forwarded to `aiyoucli hooks pre-task` / `post-task`). Disabled by default — OpenCode already gets lifecycle hooks via @aiyou-dev/team; this brings Claude Code to parity when opted in", type: "boolean" },
   ],
   examples: [
     { command: "aiyoucli init", description: "Initialize with full 4-phase bootstrap (wire + write + warm + verify)" },
@@ -167,6 +168,7 @@ const initCommand: Command = {
 
     const fileResults: FileWriteResult[] = [];
     const withMcp = ctx.flags.withMcp as boolean;
+    const withHooks = ctx.flags.withHooks as boolean;
 
     // 1. Generate AGENTS.md (always)
     try {
@@ -201,7 +203,7 @@ const initCommand: Command = {
 
     // 2. Generate tool-specific configs
     try {
-      const settingsResults = await generateSettings(cwd, targets, ctx.flags.force as boolean, withMcp);
+      const settingsResults = await generateSettings(cwd, targets, ctx.flags.force as boolean, withMcp, withHooks);
       fileResults.push(...settingsResults);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -956,12 +958,21 @@ const hooksCommand: Command = {
       description: "Pre-task hook (routing recommendation)",
       options: [
         { name: "description", short: "d", description: "Task description", type: "string", required: true },
+        { name: "file", short: "f", description: "File path (from Claude Code tool_input.file_path)", type: "string" },
+        { name: "edit-kind", short: "k", description: "mod|new|delete (Claude Code edit classification)", type: "string" },
       ],
       action: async (ctx) => {
         ensureTools();
         const description = ctx.flags.description || ctx.flags.d || ctx.args.join(" ");
+        const file  = ctx.flags.file as string | undefined;
+        const kind  = ctx.flags["edit-kind"] as string | undefined;
         if (!description) { output.error("Description required: --description <text>"); return; }
-        const result = await callTool("hooks_pre_task", { description });
+        // Compose: "Edit src/foo.ts (mod)" gives the router a richer keyword than
+        // the bare word "edit" — file path + edit kind both feed the Q-table's
+        // hash bucket without inflating it (we deliberately do NOT include
+        // tool_input.old_string / new_string — they're often multi-MB).
+        const composed = file ? `${description} ${file}${kind ? " (" + kind + ")" : ""}` : description;
+        const result = await callTool("hooks_pre_task", { description: composed });
         printJson(result);
       },
     },
@@ -970,20 +981,23 @@ const hooksCommand: Command = {
       description: "Post-task hook (record outcome)",
       options: [
         { name: "description", short: "d", description: "Task description", type: "string", required: true },
-        { name: "agent", short: "a", description: "Agent type used", type: "string", required: true },
-        { name: "success", short: "s", description: "Whether task succeeded", type: "boolean", required: true },
+        { name: "agent", short: "a", description: "Agent type used (default: 'claude' for Claude Code PostToolUse hooks; set AIYOUCLI_AUTO_AGENT to override)", type: "string" },
+        { name: "success", short: "s", description: "Whether task succeeded", type: "boolean" },
+        { name: "file", short: "f", description: "Optional file context (from Claude Code tool_input.file_path)", type: "string" },
       ],
       action: async (ctx) => {
         ensureTools();
         const description = ctx.flags.description || ctx.flags.d;
-        const agent = ctx.flags.agent || ctx.flags.a;
+        const agent = (ctx.flags.agent || ctx.flags.a || "claude");
         const success = ctx.flags.success ?? ctx.flags.s ?? true;
-        if (!description || !agent) {
-          output.error("Required: --description <text> --agent <type> --success");
+        const file  = ctx.flags.file as string | undefined;
+        if (!description) {
+          output.error("Required: --description <text>");
           return;
         }
+        const composed = file ? `${description} ${file}` : description;
         const result = await callTool("hooks_post_task", {
-          description,
+          description: composed,
           agent,
           success: success === true || success === "true",
         });
