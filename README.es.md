@@ -1,6 +1,6 @@
 # aiyoucli
 
-> **Infraestructura de agentes AI para desarrolladores.** Inteligencia vectorial potenciada por Rust, equipos de agentes estructurados y grafos de conocimiento de código — unificados a través de un único CLI y servidor MCP.
+> **Infraestructura de agentes IA para desarrolladores.** Inteligencia vectorial potenciada por Rust, equipos de agentes estructurados y grafos de conocimiento de código — unificados en un solo CLI y servidor MCP.
 
 [![npm version](https://img.shields.io/npm/v/@aiyou-dev/cli)](https://www.npmjs.com/package/@aiyou-dev/cli)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -14,11 +14,11 @@
 ## Por qué aiyoucli
 
 | Señal | Valor |
-|-------|-------|
-| **Superficie** | 25 comandos CLI · 84 herramientas MCP · 8 roles de agente · 17 crates de Rust |
-| **Huella** | 6.441 líneas de TypeScript — 65× más pequeño que herramientas comparables |
-| **Costo de ejecución** | Cero dependencias en runtime. Un único binario NAPI maneja toda la computación |
-| **Latencia** | Selección de modelo en 0.04ms · Aprendizaje neural en 0.18ms · Grafo k-hop en 0.08ms |
+|--------|-------|
+| **Superficie** | 25 comandos CLI · 48 tools MCP · 8 roles de agente · 12 crates de Rust (2 aiyoucli + 10 aiyouvector) |
+| **Tamaño** | 14.765 líneas de TypeScript |
+| **Costo en runtime** | Cero dependencias de runtime. Un único binario NAPI maneja todo el cómputo |
+| **Latencia** | Selección de tier de modelo en 0.04ms · Aprendizaje neural en 0.18ms · k-hop de grafo en 0.08ms |
 
 ---
 
@@ -27,41 +27,48 @@
 ```
                     ┌──────────────────────────────┐
                     │          aiyoucli             │
-                    │   CLI + Servidor MCP (TS)     │
-                    │   25 comandos · 84 herr. MCP  │
+                    │   CLI + MCP Server (TS)       │
+                    │   25 comandos · 48 tools MCP  │
                     └─────┬──────────┬──────────────┘
                           │          │
               ┌───────────┘          └───────────┐
               ▼                                  ▼
    ┌──────────────────┐              ┌──────────────────────┐
    │   @aiyou-dev/team │              │    aiyouvector        │
-   │  Equipos Agentes  │              │  Grafo Conocim. (Rust)│
-   │  8 roles agente   │              │  17 crates · SQLite    │
-   │  Plugin OpenCode  │              │  Tree-sitter · MCP     │
+   │  Agent Teams (TS) │              │  Knowledge Graph (Rust)│
+   │  8 roles de agente│              │  10 crates · SQLite    │
+   │  Plugin OpenCode  │              │  Tree-sitter · FFI     │
    └──────────────────┘              └──────────────────────┘
 ```
 
+`aiyouvector` no tiene servidor MCP ni proceso propio de cara al CLI — nadie
+lo usa directamente. `aiyoucli-napi` enlaza sus crates de Rust en el mismo
+proceso (NAPI) y `aiyoucli` es lo único que le habla: como CLI
+(`aiyoucli codebase ...`, primario) y como 3 tools MCP consolidados
+(secundario, para hosts que solo hablan MCP).
+
 | Componente | Paquete | Propósito |
-|------------|---------|-----------|
-| **aiyoucli** | `@aiyou-dev/cli` | CLI + servidor MCP. Capa de orquestación, middleware de producción, experiencia del desarrollador |
-| **aiyou-team** | `@aiyou-dev/team` | Equipos de agentes estructurados con especialización de roles, puertas de calidad e integración como plugin de OpenCode |
-| **aiyouvector** | `aiyouvector-*` (Rust) | Grafo de conocimiento de código, motor vectorial, perfil de desarrollador, aprendizaje neural, enrutamiento por atención |
+|-----------|---------|---------|
+| **aiyoucli** | `@aiyou-dev/cli` | CLI + servidor MCP. Capa de orquestación, middleware de producción, experiencia de desarrollo |
+| **aiyou-team** | `@aiyou-dev/team` | Equipos de agentes estructurados con especialización de rol, quality gates e integración de plugin para OpenCode |
+| **aiyouvector** | `aiyouvector-*` (Rust) | Grafo de conocimiento de código, motor vectorial, perfil de desarrollador, aprendizaje neural, ruteo por atención — enlazado a `aiyoucli` vía FFI, sin servidor propio |
 
 ---
 
-## Inicio Rápido
+## Inicio rápido
 
 ```sh
-# Instalación global
+# Instalar globalmente
 npm install -g @aiyou-dev/cli
 
-# Inicializar proyecto (AGENTS.md, config MCP, skills, statusline)
+# Inicializar el proyecto — AGENTS.md, skills, statusline, y para Claude Code:
+# .claude/agents/*.md + un .aiyou-team-plugin/ listo para cargar, ambos por defecto
 aiyoucli init
 
-# Específicamente para OpenCode
+# Para OpenCode específicamente
 aiyoucli init --tool opencode
 
-# Verificación de salud
+# Chequeo de salud
 aiyoucli doctor
 ```
 
@@ -72,58 +79,112 @@ aiyoucli doctor
 ### Núcleo
 
 ```
-aiyoucli init                          Inicializar proyecto — AGENTS.md, configuración, skills, statusline
-aiyoucli setup                         Configuración global — instalar aiyou-team para OpenCode
-aiyoucli status                        Resumen del estado del sistema
+aiyoucli init                          Inicializar proyecto — AGENTS.md, settings, skills, statusline
+aiyoucli setup                         Setup global — instala aiyou-team para OpenCode
+aiyoucli status                        Vista general del sistema
 aiyoucli doctor                        Diagnóstico de salud (Node ≥ 20, NAPI, git)
-aiyoucli config get --key <ruta>       Leer valor de configuración (notación con puntos)
-aiyoucli config set --key <ruta> -v    Escribir valor de configuración
-aiyoucli completions --shell <shell>   Generar autocompletado (bash/zsh)
-aiyoucli statusline                    Panel de control en terminal
-aiyoucli gcc                           Contexto git (rama, estado, commits, diffs)
+aiyoucli config get --key <path>       Leer valor de config (notación de puntos)
+aiyoucli config set --key <path> -v    Escribir valor de config
+aiyoucli completions --shell <shell>   Generar completions de shell (bash/zsh/fish/powershell)
+aiyoucli statusline                    Dashboard de terminal enriquecido
+aiyoucli gcc                           Contexto git (branch, status, commits, diffs)
+aiyoucli pdf2md <archivo.pdf> [--out f]   PDF → Markdown
+aiyoucli daemon start|status|stop      Daemon de trabajo en background
+aiyoucli update check|install          Chequear/instalar el último release de aiyoucli
 ```
 
 ### Equipo de agentes
 
-La orquestación de agentes se ofrece mediante el plugin `@aiyou-dev/team` para OpenCode. Usa `aiyoucli setup` y `aiyoucli team` para instalarlo y gestionarlo.
+La orquestación de agentes la provee el plugin `@aiyou-dev/team` de OpenCode. `aiyoucli setup` lo instala; `aiyoucli team status` reporta si está conectado.
+
+```
+aiyoucli setup                         Setup global — instala aiyou-team para OpenCode
+aiyoucli team status                   Reporta si @aiyou-dev/team está instalado/conectado
+
+aiyoucli agent list                    Roster + el modelo efectivo de cada agente (override o default de tier)
+aiyoucli agent set-model <agente> <modelo>   Fija un modelo para un agente, en ambos hosts
+```
+
+- **OpenCode** — `plugin: ["@aiyou-dev/team"]` en `opencode.json` registra los 8 agentes automáticamente al cargar OpenCode.
+- **Claude Code** — `aiyoucli init --tool claude` escribe `.claude/agents/*.md` para los 8 agentes (así la herramienta `task` de Claude Code puede delegarles) **y** genera un Plugin de Claude Code listo para cargar — ambos activados por defecto desde v1.7.1 (`--skip-agents` / `--skip-plugin` para desactivarlos). Ver [Claude Code](#claude-code) más abajo.
+
+### Protocolo A2A (Agent2Agent)
+
+Una implementación mínima en `HTTP+JSON` del [protocolo A2A](https://github.com/a2aproject/A2A) (Agent Card + `message:send`/`tasks/{id}`), sin dependencias nuevas.
+
+```
+aiyoucli a2a card <url>                                 Obtener el Agent Card de un agente remoto
+aiyoucli a2a call <url> "<msj>" --skill <id>            Enviar un mensaje y esperar a que la tarea termine
+aiyoucli a2a serve [--agent <nombre>] [--runtime claude|opencode] [--auth-token <t>]
+                                                          Exponer los propios agentes de aiyou-team vía A2A
+```
+
+`serve` despacha a un agente real — `--runtime claude` (default) vía `claude -p --agent <skill>`; `--runtime opencode` vía un `opencode serve` corriendo (o gestionado automáticamente) a través de su API HTTP. La auth es un token bearer compartido opcional; sin él, `serve` se niega a hacer bind fuera de `localhost`.
 
 ### Inteligencia
 
 ```
-aiyoucli memory init --path <p> --dimensions <d>    Inicializar almacén vectorial
-aiyoucli memory store --vector <v> --id <id>        Almacenar embedding
-aiyoucli memory search --vector <v> --k <n>         Búsqueda de similitud K-NN
-aiyoucli memory list                                 Listar vectores almacenados
+aiyoucli memory init --path <p> --dimensions <d>    Inicializar el vector store
+aiyoucli memory store --vector <v> --id <id>        Guardar un embedding
+aiyoucli memory search --vector <v> --k <n>         Búsqueda K-NN de similitud
+aiyoucli memory list                                 Listar vectores guardados
 aiyoucli memory stats                                Estadísticas de la base de datos
-aiyoucli memory delete --id <id>                     Eliminar vector
+aiyoucli memory delete --id <id>                     Eliminar un vector
 
 aiyoucli neural observe --embedding <e> --quality <q> --kind <k>
 aiyoucli neural learn                                Forzar ciclo de aprendizaje
 aiyoucli neural stats                                Estadísticas del motor SONA
 
-aiyoucli analyze diff --diff <d>                     Clasificar diff de git
-aiyoucli analyze commit --message <m>                Clasificar commit (convencional)
-aiyoucli analyze complexity --source <s>             Puntuación de complejidad
+aiyoucli analyze diff --diff <d>                     Clasificar un git diff
+aiyoucli analyze commit --message <m>                Clasificar commit (conventional)
+aiyoucli analyze complexity --source <s>             Puntaje de complejidad de código
 
-aiyoucli route --task <descripción>                  Enrutamiento Q-learning
-aiyoucli hooks route --task <descripción>            Enrutamiento por hooks
+aiyoucli route --task <descripción>                  Ruteo de tareas por Q-learning
+aiyoucli hooks route --task <descripción>            Ruteo vía hook
 aiyoucli hooks pre-task --description <d>            Hook pre-tarea
 aiyoucli hooks post-task --description <d>           Hook post-tarea
-aiyoucli hooks stats                                 Estadísticas de enrutamiento
+aiyoucli hooks stats                                 Estadísticas de ruteo
 
 aiyoucli security scan                               Auditoría de seguridad
 aiyoucli performance benchmark --vectors <n>         Benchmarks vectoriales
 ```
 
+### Codebase (indexado, búsqueda, consultas de grafo)
+
+Interfaz primaria para el motor de grafo de conocimiento `aiyouvector` — CLI-first
+por diseño (ver [Grafo de Conocimiento de Código](#grafo-de-conocimiento-de-código-aiyouvector)
+más abajo para el porqué). Cada subcomando llama a la misma función subyacente que
+llaman los tools MCP `codebase_project`/`codebase_query`/`codebase_maintenance` —
+sin lógica duplicada, solo dos puertas de entrada a una misma capa FFI.
+
+```
+aiyoucli codebase index <path> [--mode full|moderate|fast|cross-repo-intelligence]
+aiyoucli codebase list                                Listar proyectos indexados
+aiyoucli codebase delete <proyecto>                   Eliminar el índice de un proyecto
+aiyoucli codebase status <proyecto>                    Conteo de nodos/edges/archivos, schema
+aiyoucli codebase search <proyecto> --query <q>        Búsqueda BM25 o --name-pattern
+aiyoucli codebase trace <proyecto> <función> [--direction callers|callees|both] [--depth <n>]
+                                                          Trace de call-graph por BFS
+aiyoucli codebase changes <proyecto>                    Conteo de archivos trackeados (no es un git diff)
+aiyoucli codebase query <proyecto> "<cypher>"           Consulta de grafo estilo Cypher
+aiyoucli codebase schema <proyecto>                     Labels de nodos + tipos de edge
+aiyoucli codebase snippet <proyecto> <nombre_calificado>   Código fuente de un símbolo
+aiyoucli codebase architecture <proyecto>               Clusters detectados por comunidad
+aiyoucli codebase verify [--init] [--strict]            Verificar el manifiesto en disco
+aiyoucli codebase export <proyecto> [--out-dir <d>]     Archivar un proyecto
+aiyoucli codebase import <archivo>                      Restaurar un proyecto archivado
+aiyoucli codebase observe <path>                        Pasada de aprendizaje Observer/SONA, sin reindexar
+```
+
 ### MCP y Skills
 
 ```
-aiyoucli mcp start                                   Iniciar servidor MCP stdio
+aiyoucli mcp start                                   Iniciar el servidor MCP por stdio
 aiyoucli mcp status                                  Estado del servidor
-aiyoucli mcp tools                                   Listar herramientas disponibles
+aiyoucli mcp tools                                   Listar tools disponibles
 
 aiyoucli skills sync                                 Sincronizar y destilar skills a TOON
-aiyoucli skills list                                 Listar skills instaladas
+aiyoucli skills list                                 Listar skills instalados
 aiyoucli skills detect                               Detectar tecnologías del proyecto
 ```
 
@@ -131,38 +192,38 @@ aiyoucli skills detect                               Detectar tecnologías del p
 
 ## Equipos de Agentes (`@aiyou-dev/team`)
 
-Equipos de agentes estructurados con especialización de roles, puertas de calidad basadas en evidencia e integración completa como plugin de OpenCode.
+Equipos de agentes estructurados con especialización de rol, quality gates basados en evidencia, e integración completa con el plugin de OpenCode.
 
 ### El Coding Team
 
-Un equipo embebido. Ocho roles especializados. Un único propietario activo en todo momento.
+Un equipo embebido. Ocho roles especializados. Un único owner activo a la vez.
 
-| Rol | Arquetipo | Tier de Modelo | Propósito |
-|-----|-----------|----------------|-----------|
-| **CodingLeader** | ejecutor + orquestador | flagship | Propietario de ejecución principal. Persistente, pragmático, orientado al cierre |
-| **CoordinationLeader** | orquestador | strong | Apertura estilo gestión para tareas de alta ambigüedad. Planifica, acota, delega |
-| **CodingExecutor** | ejecutor | flagship | Hoja de ejecución pura. Termina el trabajo. Nunca delega implementación |
-| **CodebaseExplorer** | investigador | fast | Especialista de solo lectura en el repo. 3+ ángulos de búsqueda en paralelo. Rutas absolutas |
-| **WebResearcher** | investigador | balanced | Especialista externo de solo lectura. Evidencia > especulación. Docs oficiales primero |
-| **Reviewer** | revisor | strong | Aprueba por defecto. Máx. 3 issues bloqueantes. 80% claridad = aprueba |
-| **PrincipalAdvisor** | asesor | strong | Asesor senior de solo lectura. Una recomendación. Máx. 7 pasos de acción |
-| **MultimodalLooker** | intérprete | balanced | Intérprete de PDF/imágenes/capturas. Requiere modelos con capacidad de visión |
+| Rol | Arquetipo | Tier de modelo | Propósito |
+|------|-----------|------------|---------|
+| **CodingLeader** | ejecutor + orquestador | flagship | Owner primario de ejecución. Persistente, pragmático, orientado a cierre |
+| **CoordinationLeader** | orquestador | strong | Apertura estilo gerencial para tareas de alta ambigüedad. Planifica, acota, delega |
+| **CodingExecutor** | ejecutor | flagship | Hoja pura de ejecución. Termina el trabajo. Nunca delega implementación |
+| **CodebaseExplorer** | investigador | fast | Especialista read-only dentro del repo. 3+ ángulos de búsqueda en paralelo. Rutas absolutas |
+| **WebResearcher** | investigador | balanced | Especialista externo read-only. Evidencia > especulación. Docs oficiales primero |
+| **Reviewer** | revisor | strong | Default-approve. Máximo 3 issues bloqueantes. 80% de claridad = aprobar |
+| **PrincipalAdvisor** | asesor | strong | Asesor senior read-only. Una recomendación. Máximo 7 pasos de acción |
+| **MultimodalLooker** | intérprete | balanced | Intérprete de PDF/imagen/screenshot. Requiere modelos con visión |
 
-### Principios de Diseño
+### Principios de diseño
 
 ```
-Propietario Único Activo → Basado en Evidencia → Puertas de Calidad → Delegación Mínima
+Owner Único Activo → Basado en Evidencia → Quality Gates → Delegación Mínima
 ```
 
-- **Propietario activo único**: Exactamente un agente mantiene el contexto principal y lleva hasta el cierre
-- **Evidencia requerida**: Todas las afirmaciones necesitan verificación. Diagnósticos + build + tests deben pasar
-- **Revisión con aprobación por defecto**: El revisor rechaza solo por bloqueadores reales (máx. 3 issues)
-- **Especialistas de solo lectura**: Explorer, Researcher, Reviewer, Advisor y Looker no pueden modificar archivos
-- **Sin fallos silenciosos**: No `as any`, `@ts-ignore`, catches vacíos, ni eliminar tests que fallan
-- **Disciplina de Todo**: Tareas de 2+ pasos requieren seguimiento estructurado con un único `in_progress` a la vez
+- **Owner único activo**: Exactamente un agente sostiene el contexto principal y conduce al cierre
+- **Evidencia requerida**: Todo claim necesita verificación. Diagnósticos + build + tests deben pasar
+- **Revisión default-approve**: El Reviewer rechaza solo por bloqueadores reales (máximo 3 issues)
+- **Especialistas read-only**: Explorer, Researcher, Reviewer, Advisor y Looker no pueden modificar archivos
+- **Sin fallas silenciosas**: Nada de `as any`, `@ts-ignore`, catches vacíos, o borrar tests que fallan
+- **Disciplina de todos**: Tareas de 2+ pasos requieren tracking estructurado con un solo `in_progress` a la vez
 - **Precedencia de instrucciones**: Plataforma > Repositorio > Equipo > Agente > Tarea
 
-### Flujo de Trabajo
+### Workflow
 
 ```
 Recibir → Localizar Evidencia → Planificar/Delegar → Implementar → Revisar → Verificar → Resumir
@@ -179,84 +240,134 @@ aiyou-team se distribuye como plugin de primera clase para OpenCode:
 }
 ```
 
-### Internacionalización
+### Claude Code
 
-Traducciones completas al **inglés** y **español**. Prompts de agentes, manifiesto del equipo y todas las secciones de documentación.
+Claude Code sí tiene un mecanismo de plugin real (a diferencia del wiring
+automático de `@aiyou-dev/team` en OpenCode, necesita una fuente explícita),
+así que aiyoucli te da tanto un camino rápido y local al proyecto como uno
+compartible — **ambos generados por defecto** desde v1.7.1, sin flags extra:
+
+```bash
+aiyoucli init --tool claude
+```
+
+Escribe `.claude/agents/<nombre>.md` para cada uno de los 8 agentes:
+
+- `coding-leader` (opus) — orquestador orientado a ejecución
+- `coordination-leader` (sonnet) — coordinador orientado a plan
+- `coding-executor` (opus) — implementación directa
+- `codebase-explorer` (haiku) — búsqueda read-only de código
+- `web-researcher` (sonnet) — investigación de docs externas
+- `reviewer` (sonnet) — gate de revisión de código
+- `principal-advisor` (sonnet) — asesoría estratégica
+- `multimodal-looker` (sonnet) — interpretación visual
+
+Cada archivo tiene un frontmatter YAML (`name`, `description`, `tools`, `model`) y
+un system prompt escrito a mano — el modelo viene de
+`aiyoucli agent set-model <agente> <modelo>` si está fijado, si no un default por tier.
+Re-correr `init` es un no-op para estos archivos (idempotente); usá `--force` para
+refrescarlos.
+
+**También genera `.aiyou-team-plugin/`** — los mismos 8 agentes empaquetados como un
+[Claude Code Plugin](https://code.claude.com/docs/en/plugins) real
+(`.claude-plugin/plugin.json`, `hooks/hooks.json`, `.mcp.json`), más dos
+hooks que los archivos `.claude/` sueltos no tienen por su cuenta:
+`SessionStart` (recordatorio del roster como contexto inicial) y `UserPromptSubmit`
+(un hint de ruteo del router de Q-learning, mostrado solo por encima de un umbral
+de confianza). Se carga con:
+
+```bash
+claude --plugin-dir ./.aiyou-team-plugin
+```
+
+`--skip-agents` / `--skip-plugin` desactivan uno u otro. `aiyoucli plugin build`
+regenera solo el plugin por su cuenta (por ejemplo, después de `agent set-model`).
+
+### i18n
+
+Traducciones completas para **inglés** y **español**. Prompts de agentes, manifiesto del equipo, y todas las secciones de documentación.
 
 ```sh
 aiyou-team setup --language es    # Español
-aiyou-team setup --language en    # Inglés (predeterminado)
+aiyou-team setup --language en    # Inglés (default)
 ```
 
 ---
 
 ## Grafo de Conocimiento de Código (`aiyouvector`)
 
-Un motor nativo en Rust que indexa tu base de código en un grafo de conocimiento consultable con 17 crates especializados.
+Un motor nativo en Rust que indexa tu código en un grafo de conocimiento
+consultable. **`aiyouvector` no tiene servidor MCP ni proceso propio de
+cara al cliente** — nadie lo usa directamente. `aiyoucli-napi` enlaza sus
+crates en el mismo proceso (FFI) y `aiyoucli` es el único consumidor: la
+familia de comandos `codebase` de arriba es la interfaz primaria
+(descubrible vía `--help`, sin el costo fijo de schema MCP — ver
+[mcp2cli](https://pypi.org/project/mcp2cli/) y su razonamiento de
+"ahorrar 96-99% de los tokens desperdiciados en schemas de tools cada
+turno"); 3 tools MCP consolidados (`codebase_project`, `codebase_query`,
+`codebase_maintenance`) son el camino secundario, para hosts que solo
+hablan MCP y no pueden correr un comando de shell. `aiyouvector` también
+distribuye un binario CLI standalone (`aiyouvector index/search/query/...`)
+para uso humano directo, y `aiyouvector serve` (feature `visual`) — un
+visor 3D de grafo separado, solo para humanos, no relacionado con la
+superficie orientada a agentes de arriba.
 
 ### Arquitectura
 
 ```
-Capa 4 — Interfaz        cli · server (HTTP/REST) · mcp
-Capa 3 — Inteligencia    graph · attention · solver · gnn
-Capa 2 — Aprendizaje     profile · sona · observer · watchdog
-Capa 1 — Fundación       core (HNSW + SIMD + redb) · daemon
+Capa 4 — Codebase          codebase (indexer, BM25/cypher, submódulos
+                            metagraph/gnn/solver, verificador, exportador,
+                            graph-ui [visual])
+Capa 3 — Aprendizaje        profile · sona · observer · watchdog
+Capa 2 — Inteligencia       routing · attention · embeddings
+Capa 1 — Fundación          core (HNSW + SIMD + redb) · graph
 ```
 
-### 17 Crates
+### 10 Crates
 
 | Crate | Función |
-|-------|---------|
+|-------|----------|
+| `aiyouvector-codebase` | Indexado de código: parsing tree-sitter, búsqueda, trace, Cypher, servidor graph-ui |
 | `aiyouvector-core` | Motor vectorial: HNSW, distancia SIMD, almacenamiento redb, cuantización |
-| `aiyouvector-graph` | Grafo de conocimiento: nodos/aristas tipados, BFS, exportación CSR |
-| `aiyouvector-codebase` | Indexación de código: parsing tree-sitter, búsqueda, trazado, servidor MCP |
-| `aiyouvector-metagraph` | Meta-grafo multi-proyecto: grafo de grafos, detección de relaciones |
-| `aiyouvector-profile` | Perfil de desarrollador: patrones, grafo de preferencias, análisis temporal |
-| `aiyouvector-sona` | Auto-aprendizaje: MicroLoRA (rango 2), REINFORCE, consolidación EWC++ |
+| `aiyouvector-graph` | Grafo de conocimiento: nodos/edges tipados, BFS, export CSR, persistencia redb |
+| `aiyouvector-profile` | Perfil de desarrollador: pattern matching, grafo de preferencias, análisis temporal |
+| `aiyouvector-sona` | Auto-aprendizaje: MicroLoRA (rank 2), REINFORCE, consolidación EWC++ |
 | `aiyouvector-attention` | Mecanismos de atención: scaled-dot, multi-head, flash, linear |
-| `aiyouvector-solver` | Solvers sublineales: Forward Push PPR, Gradiente Conjugado, Neumann |
-| `aiyouvector-gnn` | Red Neuronal de Grafos con agregación de vecinos |
 | `aiyouvector-embeddings` | Embedder de texto por feature-hashing (n-gram + hashing trick), <1μs/embed |
-| `aiyouvector-routing` | Enrutamiento por tier de modelo con router Q-learning |
-| `aiyouvector-observer` | Observador de filesystem + embedder SimHash |
+| `aiyouvector-routing` | Ruteo por tier de modelo con router de Q-learning |
+| `aiyouvector-observer` | Watcher de filesystem + embedder SimHash |
 | `aiyouvector-watchdog` | Contexto de sesión de agente + notificaciones de cambio de memoria |
-| `aiyouvector-daemon` | Daemon global con IPC por socket Unix |
-| `aiyouvector-server` | Servidor HTTP/REST (axum) |
-| `aiyouvector-visual` | API HTTP de visualización de grafos |
-| `aiyouvector-cli` | CLI independiente: init, search, profile, collections, daemon |
 
-### Pipeline de Indexación
+`metagraph`/`gnn`/`solver` son submódulos dentro de `aiyouvector-codebase`,
+no crates separados.
 
-```
-1. Parsing paralelo (tree-sitter, rayon)     ─── 18 lenguajes
-2. Extraer símbolos → nodos del grafo        ─── 17 tipos de nodo
-3. Extraer relaciones → aristas del grafo    ─── 21 tipos de arista
-4. Actualizar hashes (SHA256)                ─── indexación incremental
-5. Reconstruir índice FTS5 full-text         ─── búsqueda BM25 lista
-```
-
-**Lenguajes soportados**: Rust, TypeScript/TSX, JavaScript/JSX, Python, Go, Java, C, C++, C#, Ruby, PHP, Scala, Kotlin, Swift, Vue, Svelte, YAML, JSON, Markdown, HTML, CSS, Bash
-
-### Herramientas MCP (14 herramientas de grafo)
+### Pipeline de indexado
 
 ```
-index_repository              Indexar un repo (completo/moderado/rápido/multi-repo)
-list_projects                 Listar todos los proyectos indexados con estadísticas
-delete_project                Eliminar base de datos de un proyecto
-index_status                  Conteos de nodos/aristas/archivos, etiquetas, tipos
-search_graph                  Búsqueda BM25 o regex con filtro de etiquetas
-search_code                   Grep aumentado por grafo con dedup a nivel de función
-trace_path                    Trazado BFS de llamadas/dependencias (entrada/salida/ambos)
-detect_changes                Rastrear cambios de archivos desde el último índice
-query_graph                   Ejecutar consultas Cypher contra el grafo
-get_graph_schema              Etiquetas de nodos y tipos de aristas
-get_code_snippet              Leer código fuente para un nombre calificado
-get_architecture              Clusters por detección de comunidades Leiden
-manage_adr                    CRUD de Registros de Decisiones de Arquitectura
-ingest_traces                 Ingestar trazas de ejecución en runtime
+1. Parse en paralelo (tree-sitter, rayon)   ─── 18 lenguajes
+2. Extraer símbolos → nodos del grafo       ─── 17 tipos de nodo
+3. Extraer relaciones → edges del grafo     ─── 21 tipos de edge
+4. Actualizar hashes de archivo (SHA256)    ─── indexado incremental
+5. Reconstruir índice full-text FTS5        ─── búsqueda BM25 lista
 ```
 
-### Soporte de Consultas Cypher
+**Lenguajes soportados** (18, gramática tree-sitter por extensión): Rust, TypeScript/TSX, JavaScript/JSX, Python, Go, Java, C, C++, C#, Ruby, PHP, Scala, YAML, JSON, Markdown, HTML, CSS, Bash
+
+### Acceso (CLI primero, MCP secundario)
+
+Ver [Codebase (indexado, búsqueda, consultas de grafo)](#codebase-indexado-búsqueda-consultas-de-grafo)
+arriba para la lista completa de comandos `aiyoucli codebase ...` — esa es la
+interfaz primaria. Las mismas 14 operaciones también son accesibles vía MCP
+como 3 tools despachados por modo (no un tool por operación — ver
+[Servidor MCP](#servidor-mcp) más abajo):
+
+| Tool MCP | modos |
+|----------|-------|
+| `codebase_project` | `index`, `list`, `delete`, `export`, `import` |
+| `codebase_query` | `status`, `search`, `trace`, `changes`, `cypher`, `schema`, `snippet`, `architecture` |
+| `codebase_maintenance` | `verify`, `observe` |
+
+### Soporte de consultas Cypher
 
 ```cypher
 MATCH (n:Function)-[:Calls]->(m:Function)
@@ -265,94 +376,107 @@ RETURN n, m
 LIMIT 10
 ```
 
-Se compila a CTEs SQL recursivas con límite de profundidad de 5. Soporta `MATCH`, `WHERE`, `RETURN`, `LIMIT`.
+Compila a CTEs SQL recursivas con límite de profundidad 5. Soporta `MATCH`, `WHERE`, `RETURN`, `LIMIT`.
 
-### Modos de Búsqueda
+### Modos de búsqueda
 
-| Modo | Método | Caso de Uso |
-|------|--------|-------------|
-| **BM25** | Full-text FTS5 con división camelCase | Búsqueda por nombre, palabras clave |
-| **Vectorial** | Similitud coseno en embeddings de 768 dim | Búsqueda semántica |
-| **Híbrido** | Reciprocal Rank Fusion (k=60) | Lo mejor de ambos mundos |
-| **Regex** | Coincidencia de patrones por nombre | Consultas con comodines |
+| Modo | Método | Caso de uso |
+|------|--------|----------|
+| **BM25** | Full-text FTS5 con split de camelCase | Búsqueda por nombre, keyword lookup |
+| **Vector** | Similitud coseno sobre embeddings de 768 dims | Búsqueda semántica |
+| **Híbrido** | Reciprocal Rank Fusion (k=60) | Lo mejor de ambos |
+| **Regex** | Matching de patrón de nombre | Consultas con wildcard |
 
-### Perfil de Desarrollador (Aprendizaje)
+### Perfil de desarrollador (aprendizaje)
 
-Ciclo de aprendizaje de tres niveles que se ejecuta localmente sin llamadas de red:
+Loop de aprendizaje de tres niveles que corre localmente sin llamadas de red:
 
-| Bucle | Frecuencia | Acción |
-|-------|-----------|--------|
-| **A — Instantáneo** | Por observación | Acumulación de gradientes MicroLoRA (rango 2, ~500 params) |
-| **B — Cada hora** | Intervalo 3600s | Drenar buffer, procesar señales, aplicar gradientes |
-| **C — Semanal** | Intervalo 604800s | Decaimiento, re-clustering K-means++, podar patrones de baja confianza |
+| Loop | Frecuencia | Acción |
+|------|-----------|--------|
+| **A — Instantáneo** | Por observación | Acumulación de gradiente MicroLoRA (rank 2, ~500 params) |
+| **B — Cada hora** | Intervalo 3600s | Vacía el buffer, procesa señales, aplica gradientes |
+| **C — Semanal** | Intervalo 604800s | Decay, re-clustering K-means++, poda de patrones de baja confianza |
 
-### Detección de Comunidades
+### Detección de comunidades
 
-Propagación de etiquetas tipo Leiden con resolución configurable. Retorna clusters con puntuaciones de cohesión (aristas_internas / aristas_totales).
+Propagación de labels estilo Leiden con resolución configurable. Devuelve clusters con puntajes de cohesión (internal_edges / total_edges).
 
 ---
 
 ## Servidor MCP
 
-84 herramientas en 24 módulos. Cualquier cliente compatible con MCP puede usarlas.
+48 tools en 24 módulos, todos desde un único servidor. Cualquier cliente
+compatible con MCP puede usarlos; `aiyouvector` no tiene servidor MCP propio —
+su capacidad de indexado de código está consolidada en este mismo proceso vía
+FFI (ver [Grafo de Conocimiento de Código](#grafo-de-conocimiento-de-código-aiyouvector)).
 
 ### Configuración
 
 ```jsonc
-// .mcp.json
+// .mcp.json — esto es exactamente lo que genera `aiyoucli init --with-mcp`
 {
   "mcpServers": {
     "aiyoucli": {
-      "command": "npx",
-      "args": ["@aiyou-dev/cli", "mcp", "start"]
-    },
-    "aiyouvector": {
-      "command": "aiyouvector-codebase",
-      "args": ["mcp"]
+      "command": "aiyoucli-mcp",
+      "args": [],
+      "env": {}
     }
   }
 }
 ```
 
-### Categorías de Herramientas
+### Categorías de tools
 
 | Módulo | Destacados |
 |--------|------------|
-| **Métricas** | Seguimiento de tokens, cálculo de costos, percentiles de latencia y memoria |
-| **Proxy Gateway** | Chat, shield de inyección de prompts, compresión, caché, embedding y segmentación |
-| **Memoria Vectorial** | Almacenamiento HNSW persistente con redb |
-| **Router Semántico** | Enrutamiento híbrido de keywords y embeddings |
-| **Hooks y Ciclo de Vida** | Enrutamiento Q-learning y hooks pre/post tarea |
-| **Aprendizaje Neural** | Motor SONA: observar, transformar, aprender y estadísticas |
-| **Análisis de Código y AST** | Diffs, commits, complejidad y AST multi-lenguaje |
-| **Skills** | Sync TOON, listado y detección tecnológica |
-| **Grafo (aiyouvector)** | Indexar, buscar, trazar, Cypher, arquitectura y esquema |
+| **Metrics** | Tracking de tokens, cálculo de costo, percentiles de latencia, uso de memoria |
+| **Proxy Gateway** | Chat completions, shield anti-prompt-injection, compresión, caché, embedding, segmentación |
+| **Vector Memory** | Almacenamiento persistente HNSW (redb), insert/search/delete/count/stats |
+| **Semantic Router** | Ruteo híbrido keyword + embedding |
+| **Hooks & Lifecycle** | Ruteo por Q-learning y hooks pre/post tarea |
+| **Neural Learning** | Motor SONA: observe, transform, learn, stats |
+| **Code & AST Analysis** | Diff, commit, complejidad, y análisis AST multi-lenguaje |
+| **Skills** | Sync TOON, listado, y detección de tecnologías |
+| **Distiller** | Destilación de markdown a TOON |
+| **Codebase (aiyouvector vía FFI)** | Index, search, trace, Cypher, architecture, schema, snippets |
+| **Config & System** | Configuración por notación de puntos y diagnósticos de salud |
+| **A2A** | Cliente del protocolo Agent2Agent — obtiene un Agent Card remoto, envía un mensaje y espera la tarea |
+| **PDF** | Extracción de PDF a Markdown |
+| **Discovery** | Reporte de capacidades/versión para hosts MCP-only |
+| **Git Context (GCC)** | Branch, status, commits, diffs |
+| **Security** | Auditoría de seguridad estática |
+| **Performance** | Benchmarks del motor vectorial |
+| **Status & Stats** | Estado del sistema/statusline; estadísticas por subsistema |
+| **Graph** | Bootstrap del grafo de conocimiento y consultas de vecinos k-hop |
 
 ---
 
 ## Integración con OpenCode
 
-aiyoucli se integra con [OpenCode](https://opencode.ai) en múltiples niveles:
+aiyoucli se integra con [OpenCode](https://opencode.ai) en varios niveles:
 
-### 1. Sistema de Plugins
+### 1. Sistema de plugins
 
 ```jsonc
-// opencode.json
+// opencode.json — esto es exactamente lo que genera `aiyoucli init --tool opencode`
 {
-  "plugin": ["@aiyou-dev/team"],
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "aiyoucli": { "type": "stdio", "command": "npx", "args": ["@aiyou-dev/cli", "mcp", "start"] },
-    "aiyouvector": { "type": "stdio", "command": "aiyouvector-codebase", "args": ["mcp"] }
-  }
+    "aiyoucli": { "type": "local", "command": ["aiyoucli-mcp"], "enabled": false }
+  },
+  "plugin": ["aiyou-team"],
+  "instructions": ["AGENTS.md"]
 }
 ```
 
-### 2. Equipos de Agentes como Sesiones de OpenCode
+(`mcp.aiyoucli.enabled` es `false` a menos que se haya pasado `--with-mcp` — el mismo razonamiento de off-por-defecto que el `.mcp.json` de Claude Code.)
 
-Cada rol de agente se mapea a una sesión de OpenCode con tier de modelo, temperatura, herramientas y permisos personalizados:
+### 2. Equipos de agentes como sesiones de OpenCode
 
-| Agente | Sesión OpenCode | Tier de Modelo | Visión |
-|--------|-----------------|----------------|--------|
+Cada rol de agente mapea a una sesión de OpenCode con tier de modelo, temperatura, tools y permisos propios:
+
+| Agente | Sesión OpenCode | Tier de modelo | Visión |
+|-------|-----------------|------------|--------|
 | CodingLeader | `coding-leader` | flagship | — |
 | CoordinationLeader | `coordination-leader` | strong | — |
 | CodingExecutor | `coding-executor` | flagship | — |
@@ -364,7 +488,7 @@ Cada rol de agente se mapea a una sesión de OpenCode con tier de modelo, temper
 
 ### 3. Hook de Statusline
 
-Panel de control en terminal mostrando vectores, tests, estado git, modelo y contexto — solo datos que realmente existen.
+Dashboard de terminal enriquecido que muestra vectores, tests, estado de git, modelo y contexto — solo datos que realmente existen.
 
 ---
 
@@ -374,47 +498,48 @@ Panel de control en terminal mostrando vectores, tests, estado git, modelo y con
 ┌──────────────────────────────────────────────────────────────┐
 │                     CLI / Servidor MCP                        │
 │                      (TypeScript)                             │
-│   Comandos CLI · herramientas MCP · middleware de producción    │
+│   Comandos CLI · tools MCP · middleware de producción         │
 │   Circuit breaker · Rate limiter · Retry + backoff exponencial│
 ├──────────────────────────────────────────────────────────────┤
-│                    Puente NAPI (binario único)                │
-│                    aiyoucli-napi (6.8MB)                      │
+│                    Puente NAPI                                │
+│                    aiyoucli-napi (~32MB)                      │
 ├──────────────────────────────────────────────────────────────┤
-│                     Motores Rust                              │
+│                     Motores en Rust                           │
 │                                                               │
-│  vector    HNSW + SIMD       │  Gateway routing + caché       │
+│  vector    HNSW + SIMD       │  Ruteo + caché de gateway      │
 │  sona      MicroLoRA+EWC++   │  Shield + firewall             │
 │  attention 4 mecanismos      │  Compresión + segmentación     │
 │  routing   Q-learning        │  Análisis AST (6 lenguajes)    │
-│  graph     k-hop + BFS       │  Enrutamiento semántico        │
+│  graph     k-hop + BFS       │  Ruteo semántico (híbrido)     │
 │  analysis  diff/commit/      │  Embedding (cliente ONNX)      │
 │            complejidad       │                                 │
-│  detector  45+ techs         │                                 │
+│  detector  45+ tecnologías   │                                 │
 │  distiller formato TOON      │                                 │
 ├──────────────────────────────────────────────────────────────┤
-│                    aiyouvector (17 crates)                    │
-│  codebase graph · profile · embeddings · solver · gnn         │
-│  metagraph · observer · watchdog · daemon · server             │
+│                    aiyouvector (10 crates)                    │
+│  codebase (incl. submódulos solver/gnn/metagraph) · graph      │
+│  profile · embeddings · sona · attention · routing             │
+│  observer · watchdog · core                                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Diseño**: TypeScript maneja I/O, protocolo MCP y middleware de producción. Toda la computación cruza el puente NAPI hacia Rust, donde las operaciones se completan en microsegundos.
+**Diseño**: TypeScript maneja I/O, protocolo MCP, y middleware de producción. Todo el cómputo cruza el puente NAPI hacia Rust, donde las operaciones terminan en microsegundos.
 
 ---
 
 ## Rendimiento
 
-Benchmarks en Apple M-series. Todo en proceso, sin llamadas de red.
+Benchmarks en Apple M-series. Todo in-process, sin llamadas de red.
 
-| Operación | Latencia | Rendimiento |
-|-----------|--------:|------------:|
+| Operación | Latencia | Throughput |
+|-----------|--------:|-----------:|
 | Selección de tier de modelo | 0.04ms | 23.923 ops/s |
-| Grafo k-hop (100 nodos) | 0.08ms | 13.158 ops/s |
-| Enrutamiento de tareas | 0.11ms | 8.718 ops/s |
+| Graph k-hop (100 nodos) | 0.08ms | 13.158 ops/s |
+| Ruteo de tareas | 0.11ms | 8.718 ops/s |
 | Análisis de complejidad | 0.15ms | 6.631 ops/s |
-| Aprendizaje neural | 0.18ms | 5.445 ops/s |
-| Observación neural | 0.42ms | 2.398 ops/s |
-| Inserción vectorial (3D) | 1.87ms | 534 ops/s |
+| Neural learn | 0.18ms | 5.445 ops/s |
+| Neural observe | 0.42ms | 2.398 ops/s |
+| Insert vectorial (3D) | 1.87ms | 534 ops/s |
 | Búsqueda vectorial (100 vectores) | 3.36ms | 297 ops/s |
 
 ---
@@ -427,10 +552,10 @@ aiyoucli config set memory.backend aiyouvector
 aiyoucli config set llm.base_url http://127.0.0.1:8000/v1
 ```
 
-Variables de entorno:
+Overrides por variable de entorno:
 
-| Variable | Ruta de Config |
-|----------|---------------|
+| Variable | Ruta de config |
+|----------|------------|
 | `AIYOUCLI_MEMORY_BACKEND` | `memory.backend` |
 | `AIYOUCLI_MEMORY_PATH` | `memory.storagePath` |
 | `AIYOUCLI_MEMORY_DIMENSIONS` | `memory.dimensions` |
@@ -440,10 +565,10 @@ Variables de entorno:
 
 ---
 
-## Soporte de Plataformas
+## Soporte de plataformas
 
-| Objetivo | Binario |
-|----------|---------|
+| Target | Binario |
+|--------|--------|
 | macOS ARM64 | `@aiyou-dev/cli-darwin-arm64` |
 | macOS x64 | `@aiyou-dev/cli-darwin-x64` |
 | Linux ARM64 | `@aiyou-dev/cli-linux-arm64-gnu` |
@@ -452,16 +577,16 @@ Variables de entorno:
 
 ---
 
-## Estructura de Archivos
+## Estructura de archivos
 
 ```
 .aiyoucli/
 ├── config.json              # Configuración del proyecto
-├── memory-config.json       # Config de base de datos vectorial
+├── memory-config.json       # Config de la base de datos vectorial
 ├── vectors.redb             # Base de datos vectorial persistente
-├── q-table.json             # Persistencia Q-Learning
+├── q-table.json             # Persistencia de Q-Learning
 ├── metrics/*.json           # Snapshots de métricas
-├── skills/*.dsi.toon        # Skills destiladas a formato TOON
+├── skills/*.dsi.toon        # Archivos de skill destilados a TOON
 ├── helpers/statusline.cjs   # Script de statusline
 └── agents.dsi.toon          # AGENTS.md destilado a TOON
 ```
@@ -488,4 +613,4 @@ MIT — [LICENSE](LICENSE)
 
 ---
 
-Creado por [Francisco August](https://github.com/faugustdev).
+Hecho por [Francisco August](https://github.com/faugustdev).

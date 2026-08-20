@@ -15,8 +15,8 @@
 
 | Signal | Value |
 |--------|-------|
-| **Surface area** | 21 CLI commands · 44 MCP tools · 8 agent roles · 12 Rust crates (2 aiyoucli + 10 aiyouvector) |
-| **Footprint** | 6,441 lines of TypeScript — 65× smaller than comparable tools |
+| **Surface area** | 25 CLI commands · 48 MCP tools · 8 agent roles · 12 Rust crates (2 aiyoucli + 10 aiyouvector) |
+| **Footprint** | 14,765 lines of TypeScript |
 | **Runtime cost** | Zero runtime dependencies. A single NAPI binary handles all compute |
 | **Latency** | Model tier selection in 0.04ms · Neural learning in 0.18ms · Graph k-hop in 0.08ms |
 
@@ -28,7 +28,7 @@
                     ┌──────────────────────────────┐
                     │          aiyoucli             │
                     │   CLI + MCP Server (TS)       │
-                    │   21 commands · 44 MCP tools  │
+                    │   25 commands · 48 MCP tools  │
                     └─────┬──────────┬──────────────┘
                           │          │
               ┌───────────┘          └───────────┐
@@ -61,7 +61,8 @@ and `aiyoucli` is the only thing that ever talks to it: as a CLI
 # Install globally
 npm install -g @aiyou-dev/cli
 
-# Initialize project (AGENTS.md, MCP config, skills, statusline)
+# Initialize project — AGENTS.md, skills, statusline, and for Claude Code:
+# .claude/agents/*.md + a ready-to-load .aiyou-team-plugin/, both by default
 aiyoucli init
 
 # For OpenCode specifically
@@ -84,17 +85,41 @@ aiyoucli status                        System status overview
 aiyoucli doctor                        Health diagnostics (Node ≥ 20, NAPI, git)
 aiyoucli config get --key <path>       Read config value (dot-notation)
 aiyoucli config set --key <path> -v    Write config value
-aiyoucli completions --shell <shell>   Generate shell completions (bash/zsh)
+aiyoucli completions --shell <shell>   Generate shell completions (bash/zsh/fish/powershell)
 aiyoucli statusline                    Rich terminal dashboard
 aiyoucli gcc                           Git context (branch, status, commits, diffs)
+aiyoucli pdf2md <file.pdf> [--out f]   PDF → Markdown
+aiyoucli daemon start|status|stop      Background worker daemon
+aiyoucli update check|install          Check/install the latest aiyoucli release
 ```
 
 ### Agent Team
 
-Agent orchestration is provided by the `@aiyou-dev/team` OpenCode plugin. Use `aiyoucli setup` and `aiyoucli team` to install and manage it.
+Agent orchestration is provided by the `@aiyou-dev/team` OpenCode plugin. `aiyoucli setup` installs it; `aiyoucli team status` reports whether it's wired up.
+
+```
+aiyoucli setup                         Global setup — install aiyou-team for OpenCode
+aiyoucli team status                   Report whether @aiyou-dev/team is installed/wired
+
+aiyoucli agent list                    Roster + each agent's effective model (override or tier default)
+aiyoucli agent set-model <agent> <model>   Pin a model for one agent, both hosts
+```
 
 - **OpenCode** — `plugin: ["@aiyou-dev/team"]` in `opencode.json` registers the 8 agents automatically when OpenCode loads.
-- **Claude Code** — `aiyoucli init --tool claude --with-agents` writes `.claude/agents/*.md` for all 8 agents so Claude Code's `task` tool can dispatch to them. Off by default.
+- **Claude Code** — `aiyoucli init --tool claude` writes `.claude/agents/*.md` for all 8 agents (so Claude Code's `task` tool can dispatch to them) **and** generates a ready-to-load Claude Code Plugin — both on by default as of v1.7.1 (`--skip-agents` / `--skip-plugin` opt out). See [Claude Code](#claude-code) below.
+
+### A2A (Agent2Agent) Protocol
+
+A minimal `HTTP+JSON` implementation of the [A2A protocol](https://github.com/a2aproject/A2A) (Agent Card + `message:send`/`tasks/{id}`), zero new dependencies.
+
+```
+aiyoucli a2a card <url>                                 Fetch a remote agent's Agent Card
+aiyoucli a2a call <url> "<msg>" --skill <id>            Send a message, wait for the task to complete
+aiyoucli a2a serve [--agent <name>] [--runtime claude|opencode] [--auth-token <t>]
+                                                          Expose aiyou-team's own agents over A2A
+```
+
+`serve` dispatches to a real agent — `--runtime claude` (default) via `claude -p --agent <skill>`; `--runtime opencode` via a running (or auto-managed) `opencode serve`'s HTTP API. Auth is an optional shared bearer token; without one, `serve` refuses to bind beyond `localhost`.
 
 ### Intelligence
 
@@ -138,7 +163,8 @@ aiyoucli codebase list                                List indexed projects
 aiyoucli codebase delete <project>                    Remove a project's index
 aiyoucli codebase status <project>                     Node/edge/file counts, schema
 aiyoucli codebase search <project> --query <q>         BM25 or --name-pattern search
-aiyoucli codebase trace <project> <function>            BFS call-graph trace
+aiyoucli codebase trace <project> <function> [--direction callers|callees|both] [--depth <n>]
+                                                          BFS call-graph trace
 aiyoucli codebase changes <project>                     Tracked-file count (not a git diff)
 aiyoucli codebase query <project> "<cypher>"            Cypher-style graph query
 aiyoucli codebase schema <project>                      Node labels + edge types
@@ -216,13 +242,16 @@ aiyou-team ships as a first-class OpenCode plugin:
 
 ### Claude Code
 
-Claude Code has no plugin mechanism like OpenCode's, so aiyoucli writes the 8 agent identities as project files at `init` time:
+Claude Code has a real plugin mechanism (unlike OpenCode's automatic
+`@aiyou-dev/team` wiring, it needs an explicit source), so aiyoucli gives you
+both a quick, project-local path and a shareable one — **both generated by
+default** as of v1.7.1, no extra flags needed:
 
 ```bash
-aiyoucli init --tool claude --with-agents
+aiyoucli init --tool claude
 ```
 
-This writes `.claude/agents/<name>.md` for each of the 8 agents:
+Writes `.claude/agents/<name>.md` for each of the 8 agents:
 
 - `coding-leader` (opus) — execution-first orchestrator
 - `coordination-leader` (sonnet) — plan-first coordinator
@@ -233,7 +262,26 @@ This writes `.claude/agents/<name>.md` for each of the 8 agents:
 - `principal-advisor` (sonnet) — strategic advisory
 - `multimodal-looker` (sonnet) — visual interpretation
 
-Each file has a YAML frontmatter (`name`, `description`, `tools`, `model`) and a hand-authored system prompt body. Re-running `init` is a no-op (idempotent); use `--force` to refresh.
+Each file has a YAML frontmatter (`name`, `description`, `tools`, `model`) and
+a hand-authored system prompt body — the model comes from
+`aiyoucli agent set-model <agent> <model>` if pinned, else a tier default.
+Re-running `init` is a no-op for these files (idempotent); use `--force` to
+refresh.
+
+**Also generates `.aiyou-team-plugin/`** — the same 8 agents packaged as a
+real [Claude Code Plugin](https://code.claude.com/docs/en/plugins)
+(`.claude-plugin/plugin.json`, `hooks/hooks.json`, `.mcp.json`), plus two
+hooks the standalone `.claude/` files don't have on their own:
+`SessionStart` (roster reminder as initial context) and `UserPromptSubmit`
+(a routing hint from the Q-learning router, shown only above a confidence
+threshold). Load it with:
+
+```bash
+claude --plugin-dir ./.aiyou-team-plugin
+```
+
+`--skip-agents` / `--skip-plugin` opt out of either. `aiyoucli plugin build`
+regenerates just the plugin on its own (e.g. after `agent set-model`).
 
 ### i18n
 
@@ -301,7 +349,7 @@ not separate crates.
 5. Rebuild FTS5 full-text index           ─── BM25 search ready
 ```
 
-**Supported languages**: Rust, TypeScript/TSX, JavaScript/JSX, Python, Go, Java, C, C++, C#, Ruby, PHP, Scala, Kotlin, Swift, Vue, Svelte, YAML, JSON, Markdown, HTML, CSS, Bash
+**Supported languages** (18, tree-sitter grammar per extension): Rust, TypeScript/TSX, JavaScript/JSX, Python, Go, Java, C, C++, C#, Ruby, PHP, Scala, YAML, JSON, Markdown, HTML, CSS, Bash
 
 ### Access (CLI-first, MCP secondary)
 
@@ -355,7 +403,7 @@ Leiden-like label propagation with configurable resolution. Returns clusters wit
 
 ## MCP Server
 
-44 tools across 22 modules, all from a single server. Any MCP-compatible
+48 tools across 24 modules, all from a single server. Any MCP-compatible
 client can use them; `aiyouvector` has no MCP server of its own — its
 codebase-indexing capability is consolidated into this same process via
 FFI (see [Codebase Knowledge Graph](#codebase-knowledge-graph-aiyouvector)).
@@ -363,12 +411,13 @@ FFI (see [Codebase Knowledge Graph](#codebase-knowledge-graph-aiyouvector)).
 ### Configuration
 
 ```jsonc
-// .mcp.json
+// .mcp.json — this is exactly what `aiyoucli init --with-mcp` generates
 {
   "mcpServers": {
     "aiyoucli": {
-      "command": "npx",
-      "args": ["@aiyou-dev/cli", "mcp", "start"]
+      "command": "aiyoucli-mcp",
+      "args": [],
+      "env": {}
     }
   }
 }
@@ -389,6 +438,14 @@ FFI (see [Codebase Knowledge Graph](#codebase-knowledge-graph-aiyouvector)).
 | **Distiller** | TOON markdown distillation |
 | **Codebase (aiyouvector via FFI)** | Index, search, trace, Cypher, architecture, schema, snippets |
 | **Config & System** | Dot-notation configuration and health diagnostics |
+| **A2A** | Agent2Agent protocol client — fetch a remote Agent Card, send a message and wait for the task |
+| **PDF** | PDF → Markdown extraction |
+| **Discovery** | Capability/version reporting for MCP-only hosts |
+| **Git Context (GCC)** | Branch, status, commits, diffs |
+| **Security** | Static security audit |
+| **Performance** | Vector-engine benchmarks |
+| **Status & Stats** | System/statusline status; per-subsystem statistics |
+| **Graph** | Knowledge-graph bootstrap and k-hop neighbor queries |
 
 ---
 
@@ -399,14 +456,18 @@ aiyoucli integrates with [OpenCode](https://opencode.ai) at multiple levels:
 ### 1. Plugin System
 
 ```jsonc
-// opencode.json
+// opencode.json — this is exactly what `aiyoucli init --tool opencode` generates
 {
-  "plugin": ["@aiyou-dev/team"],
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "aiyoucli": { "type": "stdio", "command": "npx", "args": ["@aiyou-dev/cli", "mcp", "start"] }
-  }
+    "aiyoucli": { "type": "local", "command": ["aiyoucli-mcp"], "enabled": false }
+  },
+  "plugin": ["aiyou-team"],
+  "instructions": ["AGENTS.md"]
 }
 ```
+
+(`mcp.aiyoucli.enabled` is `false` unless `--with-mcp` was passed — same off-by-default reasoning as Claude Code's `.mcp.json`.)
 
 ### 2. Agent Teams as OpenCode Sessions
 
@@ -438,8 +499,8 @@ Rich terminal dashboard showing vectors, tests, git status, model, and context �
 │   CLI commands · MCP tools · production middleware             │
 │   Circuit breaker · Rate limiter · Retry + exponential backoff│
 ├──────────────────────────────────────────────────────────────┤
-│                    NAPI Bridge (two binaries)                 │
-│                    aiyoucli-napi (6.8MB) + aiyoucli-rd        │
+│                    NAPI Bridge                                │
+│                    aiyoucli-napi (~32MB)                      │
 ├──────────────────────────────────────────────────────────────┤
 │                     Rust Engines                              │
 │                                                               │
@@ -450,8 +511,8 @@ Rich terminal dashboard showing vectors, tests, git status, model, and context �
 │  graph     k-hop + BFS       │  Semantic routing (hybrid)     │
 │  analysis  diff/commit/      │  Embedding (ONNX client)       │
 │            complexity        │                                 │
-│  detector  45+ techs         │  Research orchestration (rd)    │
-│  distiller TOON format       │  Web search + doc processing   │
+│  detector  45+ techs         │                                 │
+│  distiller TOON format       │                                 │
 ├──────────────────────────────────────────────────────────────┤
 │                    aiyouvector (10 crates)                    │
 │  codebase (incl. solver/gnn/metagraph submodules) · graph      │
