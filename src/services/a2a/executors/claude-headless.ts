@@ -10,16 +10,12 @@
  * and an `is_error` flag. No manual system-prompt injection needed.
  *
  * The OpenCode equivalent (`opencode run --agent <name>`) does NOT work the
- * same way — `--agent` only resolves OpenCode's own statically-configured
- * agents, not the ones `@aiyou-dev/team` registers at runtime through its
- * plugin session hooks (confirmed empirically: it logs `agent "<name>" not
- * found. Falling back to default agent`). There is no OpenCode executor here
- * yet — `aiyoucli a2a serve` only supports the Claude Code runtime for now.
- * Follow-up: read `aiyou-team/src/adapters/opencode/bootstrap.ts` and
- * `canonical-agent-id.ts` to find the right way to address a specific
- * canonical agent id headlessly, likely via `opencode serve` + attaching to
- * a session the plugin has already bootstrapped, rather than the top-level
- * `run --agent` flag.
+ * same way — see `../executors/opencode-headless.ts` for the (different,
+ * HTTP-API-based) mechanism `aiyoucli a2a serve --runtime opencode` uses
+ * instead. Short version: `opencode run --agent` only accepts primary
+ * agents, and aiyou-team's roster is registered as `mode: "subagent"` —
+ * dispatch has to go through `opencode serve`'s `POST /session/{id}/message`
+ * with `agent: <canonicalId>` in the body, not the `run` CLI at all.
  *
  * SECURITY: several aiyou-team agents (coding-leader, coding-executor, ...)
  * have Edit/Write/Bash in their tool allowlist. Running them headlessly in

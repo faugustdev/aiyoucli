@@ -186,7 +186,9 @@ function writeTextIfNotExists(filePath: string, content: string): FileWriteResul
 // turn's context whether or not they're ever called; the CLI covers the
 // same functionality via Bash at zero standing token cost.
 
-function buildMcpJson(): object {
+// Exported so plugin-generator.ts (the Claude Code Plugin packaging path)
+// can reuse these instead of re-deriving the same MCP/hook shapes.
+export function buildMcpJson(): object {
   return {
     mcpServers: {
       aiyoucli: {
@@ -200,7 +202,7 @@ function buildMcpJson(): object {
 
 // ── Claude Code ─────────────────────────────────────────────────
 
-function buildClaudeSettings(withHooks: boolean): object {
+export function buildClaudeSettings(withHooks: boolean): object {
   const base = {
     statusLine: {
       type: "command",

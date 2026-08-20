@@ -1016,6 +1016,41 @@ const hooksCommand: Command = {
         printJson(result);
       },
     },
+    {
+      name: "session-start",
+      description: "SessionStart hook — print a short aiyou-team roster reminder as initial context",
+      action: async () => {
+        const { AGENT_DEFS } = await import("../init/claude-agents.js");
+        const { buildSessionStartReminder } = await import("../init/session-hooks.js");
+        output.log(buildSessionStartReminder(AGENT_DEFS));
+      },
+    },
+    {
+      name: "user-prompt-submit",
+      description: "UserPromptSubmit hook — emit a routing hint as additionalContext when confidence is high enough",
+      options: [
+        { name: "prompt", description: "The user's prompt text", type: "string" },
+        { name: "min-confidence", description: "Stay silent below this confidence (0-1, default 0.6) — avoids noise on every prompt", type: "number" },
+      ],
+      action: async (ctx) => {
+        const { buildUserPromptSubmitHint, MIN_PROMPT_LENGTH_FOR_ROUTING_HINT } = await import("../init/session-hooks.js");
+        const promptText = ((ctx.flags.prompt as string | undefined) ?? ctx.args.join(" ")).trim();
+        if (promptText.length < MIN_PROMPT_LENGTH_FOR_ROUTING_HINT) return;
+
+        ensureTools();
+        const result = await callTool("hooks_pre_task", { description: promptText });
+        let parsed: { recommended_agent?: string; confidence?: number } = {};
+        try {
+          parsed = JSON.parse(result.content[0]?.text ?? "{}");
+        } catch {
+          return;
+        }
+
+        const minConfidence = ctx.flags["min-confidence"] as number | undefined;
+        const hint = buildUserPromptSubmitHint(promptText, parsed, minConfidence);
+        if (hint) output.log(hint);
+      },
+    },
   ],
 };
 
@@ -1131,11 +1166,13 @@ const agentCommand: Command = {
 // subcommands use (same reason `mcp start` calls startMCPServer() directly
 // instead of going through a tool).
 //
-// `serve`'s dispatch to a real agent only works for Claude Code today
-// (`claude -p --agent <skill>` — see executors/claude-headless.ts). OpenCode
-// isn't wired: `opencode run --agent <name>` doesn't resolve the names
-// @aiyou-dev/team registers at runtime (confirmed empirically during the
-// Fase 3 spike — see that file's header for the follow-up needed).
+// `serve --runtime claude` (default) dispatches via `claude -p --agent
+// <skill>` (executors/claude-headless.ts). `serve --runtime opencode`
+// dispatches via a running `opencode serve`'s HTTP API — not the `opencode
+// run` CLI, which can't address a specific aiyou-team subagent directly
+// (see executors/opencode-headless.ts's header for why, confirmed
+// empirically during the Fase 3 spike). Without --opencode-server-url, it
+// spawns and manages its own `opencode serve` child process.
 
 const a2aCommand: Command = {
   name: "a2a",
@@ -1190,22 +1227,33 @@ const a2aCommand: Command = {
     },
     {
       name: "serve",
-      description: "Serve aiyou-team's agents over A2A (Claude Code runtime only, for now)",
+      description: "Serve aiyou-team's agents over A2A",
       options: [
         { name: "port", short: "p", description: "Port to listen on (default: 4173)", type: "number" },
         { name: "host", description: "Host to bind (default: 127.0.0.1 — do not change without --auth-token)", type: "string" },
         { name: "auth-token", description: "Require this bearer token on every route except the Agent Card", type: "string" },
         { name: "agent", short: "a", description: "Publish only this agent as a skill (repeatable). Default: all 8.", type: "array" },
+        {
+          name: "runtime",
+          description: "Which host actually executes a skill: claude (default) or opencode",
+          type: "string",
+          choices: ["claude", "opencode"],
+        },
+        {
+          name: "opencode-server-url",
+          description: "Attach to an already-running `opencode serve` instead of spawning/managing one (runtime=opencode only)",
+          type: "string",
+        },
       ],
       examples: [
-        { command: "aiyoucli a2a serve", description: "Publish all 8 aiyou-team agents on :4173, localhost-only, no auth" },
+        { command: "aiyoucli a2a serve", description: "Publish all 8 aiyou-team agents on :4173, localhost-only, no auth (Claude Code)" },
         { command: "aiyoucli a2a serve --agent reviewer --auth-token $(openssl rand -hex 16)", description: "Publish just reviewer, with auth" },
+        { command: "aiyoucli a2a serve --runtime opencode", description: "Same, but dispatch through a managed `opencode serve` instead of `claude -p`" },
       ],
       action: async (ctx) => {
         const { AGENT_DEFS } = await import("../init/claude-agents.js");
         const { startA2AServer } = await import("../services/a2a/server.js");
         const { buildAgentCard } = await import("../services/a2a/registry.js");
-        const { createClaudeHeadlessExecutor } = await import("../services/a2a/executors/claude-headless.js");
 
         const requested = ([] as unknown[]).concat(ctx.flags.agent ?? []).map(String);
         const agents = requested.length > 0 ? AGENT_DEFS.filter((d) => requested.includes(d.name)) : AGENT_DEFS;
@@ -1224,19 +1272,98 @@ const a2aCommand: Command = {
           return;
         }
 
-        const handle = await startA2AServer({
-          port: (ctx.flags.port as number | undefined) ?? 4173,
-          host,
-          authToken,
-          buildAgentCard: (url) => buildAgentCard({ url, agents }),
-          executor: createClaudeHeadlessExecutor({ cwd: ctx.cwd }),
-        });
+        const runtime = ((ctx.flags.runtime as string | undefined) ?? "claude") as "claude" | "opencode";
+        let executor: import("../services/a2a/server.js").TaskExecutor;
+        let stopManagedRuntime: (() => Promise<void>) | undefined;
+        let runtimeDescription: string;
+
+        if (runtime === "claude") {
+          const { createClaudeHeadlessExecutor } = await import("../services/a2a/executors/claude-headless.js");
+          executor = createClaudeHeadlessExecutor({ cwd: ctx.cwd });
+          runtimeDescription = "Claude Code headless (claude -p --agent <skill>)";
+        } else {
+          const { createOpenCodeHeadlessExecutor } = await import("../services/a2a/executors/opencode-headless.js");
+          const explicitUrl = ctx.flags["opencode-server-url"] as string | undefined;
+
+          let serverUrl = explicitUrl;
+          if (!serverUrl) {
+            const { spawnOpenCodeServe } = await import("../services/a2a/opencode-process.js");
+            output.log(color.dim("Starting a managed `opencode serve`..."));
+            const managed = await spawnOpenCodeServe({ cwd: ctx.cwd });
+            serverUrl = managed.url;
+            stopManagedRuntime = managed.stop;
+          }
+
+          executor = createOpenCodeHeadlessExecutor({ serverUrl, password: process.env.OPENCODE_SERVER_PASSWORD });
+          runtimeDescription = explicitUrl
+            ? `OpenCode via existing server at ${explicitUrl}`
+            : `OpenCode via a managed \`opencode serve\` at ${serverUrl}`;
+        }
+
+        let handle: Awaited<ReturnType<typeof startA2AServer>>;
+        try {
+          handle = await startA2AServer({
+            port: (ctx.flags.port as number | undefined) ?? 4173,
+            host,
+            authToken,
+            buildAgentCard: (url) => buildAgentCard({ url, agents }),
+            executor,
+          });
+        } catch (err) {
+          await stopManagedRuntime?.();
+          throw err;
+        }
+
+        const shutdown = async () => {
+          await handle.close().catch(() => {});
+          await stopManagedRuntime?.();
+        };
+        process.once("SIGINT", () => void shutdown().then(() => process.exit(0)));
+        process.once("SIGTERM", () => void shutdown().then(() => process.exit(0)));
 
         output.log(color.bold(`aiyou-team A2A server listening at ${handle.url}`));
         output.log(`  Agent Card: ${handle.url}/.well-known/agent-card.json`);
         output.log(`  Skills:     ${agents.map((a) => a.name).join(", ")}`);
-        output.log(color.dim("  Runtime:    Claude Code headless (claude -p --agent <skill>). OpenCode isn't wired yet."));
+        output.log(color.dim(`  Runtime:    ${runtimeDescription}`));
         output.log(color.dim("  Ctrl+C to stop."));
+      },
+    },
+  ],
+};
+
+// ── 9d. plugin ─────────────────────────────────────────────────────
+//
+// Packages the aiyou-team roster as a real Claude Code Plugin (plan Fase 4)
+// — see init/plugin-generator.ts's header for what this adds beyond the
+// standalone `.claude/` path (`aiyoucli init --with-agents`), which stays
+// unchanged for quick, no-plugin use.
+
+const pluginCommand: Command = {
+  name: "plugin",
+  description: "Package aiyou-team as a Claude Code Plugin",
+  subcommands: [
+    {
+      name: "build",
+      description: "Generate/refresh the plugin directory (agents, hooks, MCP server)",
+      options: [
+        { name: "out", short: "o", description: "Output directory (default: <project>/.aiyou-team-plugin)", type: "string" },
+      ],
+      examples: [
+        { command: "aiyoucli plugin build", description: "Generate .aiyou-team-plugin/ from the current roster + model overrides" },
+        { command: "claude --plugin-dir ./.aiyou-team-plugin", description: "Load it in Claude Code (test before sharing)" },
+      ],
+      action: async (ctx) => {
+        const { generatePlugin } = await import("../init/plugin-generator.js");
+        const outDir = (ctx.flags.out as string | undefined) ?? join(ctx.cwd, ".aiyou-team-plugin");
+        const result = generatePlugin({ outDir });
+
+        output.log(color.bold(`Plugin written to ${result.pluginDir}`));
+        for (const file of result.files) {
+          output.log(`  ${color.dim(file.replace(result.pluginDir + "/", ""))}`);
+        }
+        output.log("");
+        output.log(`Test it:   claude --plugin-dir ${result.pluginDir}`);
+        output.log("Share it:  see https://code.claude.com/docs/en/plugin-marketplaces");
       },
     },
   ],
@@ -1784,6 +1911,7 @@ export const commands: Command[] = [
   configCommand,
   agentCommand,
   a2aCommand,
+  pluginCommand,
   statusCommand,
   doctorCommand,
   neuralCommand,
