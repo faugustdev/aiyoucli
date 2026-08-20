@@ -17,6 +17,7 @@ import { execSync } from "node:child_process";
 import { generateStatuslineScript } from "../statusline/generator.js";
 import { distillMarkdown } from "../napi/index.js";
 import { AGENT_DEFS, buildClaudeAgentFile, getAgentDir } from "./claude-agents.js";
+import { loadConfig } from "../config.js";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -185,7 +186,9 @@ function writeTextIfNotExists(filePath: string, content: string): FileWriteResul
 // turn's context whether or not they're ever called; the CLI covers the
 // same functionality via Bash at zero standing token cost.
 
-function buildMcpJson(): object {
+// Exported so plugin-generator.ts (the Claude Code Plugin packaging path)
+// can reuse these instead of re-deriving the same MCP/hook shapes.
+export function buildMcpJson(): object {
   return {
     mcpServers: {
       aiyoucli: {
@@ -199,7 +202,7 @@ function buildMcpJson(): object {
 
 // ── Claude Code ─────────────────────────────────────────────────
 
-function buildClaudeSettings(withHooks: boolean): object {
+export function buildClaudeSettings(withHooks: boolean): object {
   const base = {
     statusLine: {
       type: "command",
@@ -335,10 +338,14 @@ function generateClaudeAgents(projectRoot: string, force: boolean): FileWriteRes
   const agentDir = getAgentDir(projectRoot);
   mkdirSync(agentDir, { recursive: true });
 
+  // User-pinned models (`aiyoucli config set agents.<name>.model <model>`) win
+  // over the tier default baked into buildClaudeAgentFile.
+  const agentOverrides = loadConfig().agents;
+
   const results: FileWriteResult[] = [];
   for (const def of AGENT_DEFS) {
     const filePath = join(agentDir, `${def.name}.md`);
-    const content = buildClaudeAgentFile(def);
+    const content = buildClaudeAgentFile(def, agentOverrides?.[def.name]?.model);
 
     if (force && existsSync(filePath)) {
       const previousBytes = statSafe(filePath);

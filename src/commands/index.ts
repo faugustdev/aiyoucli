@@ -1016,6 +1016,41 @@ const hooksCommand: Command = {
         printJson(result);
       },
     },
+    {
+      name: "session-start",
+      description: "SessionStart hook — print a short aiyou-team roster reminder as initial context",
+      action: async () => {
+        const { AGENT_DEFS } = await import("../init/claude-agents.js");
+        const { buildSessionStartReminder } = await import("../init/session-hooks.js");
+        output.log(buildSessionStartReminder(AGENT_DEFS));
+      },
+    },
+    {
+      name: "user-prompt-submit",
+      description: "UserPromptSubmit hook — emit a routing hint as additionalContext when confidence is high enough",
+      options: [
+        { name: "prompt", description: "The user's prompt text", type: "string" },
+        { name: "min-confidence", description: "Stay silent below this confidence (0-1, default 0.6) — avoids noise on every prompt", type: "number" },
+      ],
+      action: async (ctx) => {
+        const { buildUserPromptSubmitHint, MIN_PROMPT_LENGTH_FOR_ROUTING_HINT } = await import("../init/session-hooks.js");
+        const promptText = ((ctx.flags.prompt as string | undefined) ?? ctx.args.join(" ")).trim();
+        if (promptText.length < MIN_PROMPT_LENGTH_FOR_ROUTING_HINT) return;
+
+        ensureTools();
+        const result = await callTool("hooks_pre_task", { description: promptText });
+        let parsed: { recommended_agent?: string; confidence?: number } = {};
+        try {
+          parsed = JSON.parse(result.content[0]?.text ?? "{}");
+        } catch {
+          return;
+        }
+
+        const minConfidence = ctx.flags["min-confidence"] as number | undefined;
+        const hint = buildUserPromptSubmitHint(promptText, parsed, minConfidence);
+        if (hint) output.log(hint);
+      },
+    },
   ],
 };
 
@@ -1056,6 +1091,279 @@ const configCommand: Command = {
         }
         const result = await callTool("config_set", { key, value });
         printResult(result);
+      },
+    },
+  ],
+};
+
+// ── 9b. agent ──────────────────────────────────────────────────────
+
+// Sugar over `config get/set agents.<name>.model` — no new MCP tool, reuses
+// config_get/config_set. See init/claude-agents.ts:AGENT_DEFS for the roster
+// and modelFromTier() for the tier-based default a pinned model overrides.
+
+const agentCommand: Command = {
+  name: "agent",
+  description: "Per-agent configuration (model overrides)",
+  subcommands: [
+    {
+      name: "list",
+      description: "List the aiyou-team roster with each agent's effective model",
+      action: async () => {
+        ensureTools();
+        const { AGENT_DEFS, modelFromTier } = await import("../init/claude-agents.js");
+        const result = await callTool("config_get", { key: "agents" });
+        const raw = result.content[0]?.text ?? "{}";
+        let overrides: Record<string, { model?: string }> = {};
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") overrides = parsed;
+        } catch {}
+
+        for (const def of AGENT_DEFS) {
+          const pinned = overrides[def.name]?.model;
+          const effective = pinned ?? modelFromTier(def.tier);
+          const source = pinned ? "pinned" : `tier default (${def.tier})`;
+          output.log(`${color.bold(def.name.padEnd(20))} ${effective.padEnd(10)} ${color.dim(source)}`);
+        }
+      },
+    },
+    {
+      name: "set-model",
+      description: "Pin a model for one agent, overriding its tier default",
+      examples: [
+        { command: "aiyoucli agent set-model coding-leader opus", description: "Pin coding-leader to opus" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const agent = ctx.args[0];
+        const model = ctx.args[1];
+        if (!agent || !model) {
+          output.error("Usage: aiyoucli agent set-model <agent> <model>");
+          return;
+        }
+        const { AGENT_DEFS } = await import("../init/claude-agents.js");
+        if (!AGENT_DEFS.some((d) => d.name === agent)) {
+          output.error(`Unknown agent: ${agent}. Known: ${AGENT_DEFS.map((d) => d.name).join(", ")}`);
+          return;
+        }
+        const result = await callTool("config_set", { key: `agents.${agent}.model`, value: model });
+        printResult(result);
+        output.log(color.dim("Re-run `aiyoucli init --tool claude --force` to regenerate .claude/agents/ with this model."));
+      },
+    },
+  ],
+};
+
+// ── 9c. a2a ────────────────────────────────────────────────────────
+//
+// A2A (Agent2Agent) protocol. `card`/`call` (client direction, consuming a
+// remote A2A agent) follow the mcp2cli principle — see codebase-project-
+// tools.ts's header comment — and go through the same `a2a` MCP tool the
+// MCP-protocol path uses. `serve` (server direction, exposing aiyou-team's
+// own agents) talks to services/a2a/server.ts directly — long-running
+// processes don't fit the request/response `callTool()` shape the other
+// subcommands use (same reason `mcp start` calls startMCPServer() directly
+// instead of going through a tool).
+//
+// `serve --runtime claude` (default) dispatches via `claude -p --agent
+// <skill>` (executors/claude-headless.ts). `serve --runtime opencode`
+// dispatches via a running `opencode serve`'s HTTP API — not the `opencode
+// run` CLI, which can't address a specific aiyou-team subagent directly
+// (see executors/opencode-headless.ts's header for why, confirmed
+// empirically during the Fase 3 spike). Without --opencode-server-url, it
+// spawns and manages its own `opencode serve` child process.
+
+const a2aCommand: Command = {
+  name: "a2a",
+  description: "A2A (Agent2Agent) protocol — client (card/call) and server (serve)",
+  subcommands: [
+    {
+      name: "card",
+      description: "Fetch a remote agent's Agent Card",
+      examples: [
+        { command: "aiyoucli a2a card http://localhost:4173", description: "Show what a remote A2A agent offers" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const url = ctx.args[0];
+        if (!url) { output.error("Usage: aiyoucli a2a card <url>"); return; }
+        const result = await callTool("a2a", { mode: "card", url });
+        printJson(result);
+      },
+    },
+    {
+      name: "call",
+      description: "Send a message to a remote A2A agent and wait for the task to complete",
+      options: [
+        { name: "skill", short: "s", description: "Target skill/agent id on the remote card", type: "string" },
+        { name: "auth-token", description: "Bearer token, if the remote server requires one", type: "string" },
+        { name: "timeout", description: "Poll timeout in ms (default 120000)", type: "number" },
+      ],
+      examples: [
+        {
+          command: 'aiyoucli a2a call http://localhost:4173 "review this diff" --skill reviewer',
+          description: "Delegate to a specific remote skill and wait for the result",
+        },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const url = ctx.args[0];
+        const message = ctx.args[1];
+        if (!url || !message) {
+          output.error('Usage: aiyoucli a2a call <url> "<message>" [--skill <id>] [--auth-token <token>]');
+          return;
+        }
+        const result = await callTool("a2a", {
+          mode: "call",
+          url,
+          message,
+          skill_id: ctx.flags.skill,
+          auth_token: ctx.flags["auth-token"],
+          timeout_ms: ctx.flags.timeout,
+        });
+        printJson(result);
+      },
+    },
+    {
+      name: "serve",
+      description: "Serve aiyou-team's agents over A2A",
+      options: [
+        { name: "port", short: "p", description: "Port to listen on (default: 4173)", type: "number" },
+        { name: "host", description: "Host to bind (default: 127.0.0.1 — do not change without --auth-token)", type: "string" },
+        { name: "auth-token", description: "Require this bearer token on every route except the Agent Card", type: "string" },
+        { name: "agent", short: "a", description: "Publish only this agent as a skill (repeatable). Default: all 8.", type: "array" },
+        {
+          name: "runtime",
+          description: "Which host actually executes a skill: claude (default) or opencode",
+          type: "string",
+          choices: ["claude", "opencode"],
+        },
+        {
+          name: "opencode-server-url",
+          description: "Attach to an already-running `opencode serve` instead of spawning/managing one (runtime=opencode only)",
+          type: "string",
+        },
+      ],
+      examples: [
+        { command: "aiyoucli a2a serve", description: "Publish all 8 aiyou-team agents on :4173, localhost-only, no auth (Claude Code)" },
+        { command: "aiyoucli a2a serve --agent reviewer --auth-token $(openssl rand -hex 16)", description: "Publish just reviewer, with auth" },
+        { command: "aiyoucli a2a serve --runtime opencode", description: "Same, but dispatch through a managed `opencode serve` instead of `claude -p`" },
+      ],
+      action: async (ctx) => {
+        const { AGENT_DEFS } = await import("../init/claude-agents.js");
+        const { startA2AServer } = await import("../services/a2a/server.js");
+        const { buildAgentCard } = await import("../services/a2a/registry.js");
+
+        const requested = ([] as unknown[]).concat(ctx.flags.agent ?? []).map(String);
+        const agents = requested.length > 0 ? AGENT_DEFS.filter((d) => requested.includes(d.name)) : AGENT_DEFS;
+        if (agents.length === 0) {
+          output.error(`Unknown agent(s): ${requested.join(", ")}. Known: ${AGENT_DEFS.map((d) => d.name).join(", ")}`);
+          return;
+        }
+
+        const authToken = ctx.flags["auth-token"] as string | undefined;
+        const host = (ctx.flags.host as string | undefined) ?? "127.0.0.1";
+        if (!authToken) {
+          output.log(color.yellow("⚠ No --auth-token set.") + " Every route except the Agent Card is unauthenticated. Do not bind beyond localhost like this.");
+        }
+        if (host !== "127.0.0.1" && host !== "localhost" && !authToken) {
+          output.error("Refusing to bind a non-localhost host without --auth-token — this would let anyone on the network run aiyou-team agents (including Bash/Edit/Write-capable ones) unauthenticated.");
+          return;
+        }
+
+        const runtime = ((ctx.flags.runtime as string | undefined) ?? "claude") as "claude" | "opencode";
+        let executor: import("../services/a2a/server.js").TaskExecutor;
+        let stopManagedRuntime: (() => Promise<void>) | undefined;
+        let runtimeDescription: string;
+
+        if (runtime === "claude") {
+          const { createClaudeHeadlessExecutor } = await import("../services/a2a/executors/claude-headless.js");
+          executor = createClaudeHeadlessExecutor({ cwd: ctx.cwd });
+          runtimeDescription = "Claude Code headless (claude -p --agent <skill>)";
+        } else {
+          const { createOpenCodeHeadlessExecutor } = await import("../services/a2a/executors/opencode-headless.js");
+          const explicitUrl = ctx.flags["opencode-server-url"] as string | undefined;
+
+          let serverUrl = explicitUrl;
+          if (!serverUrl) {
+            const { spawnOpenCodeServe } = await import("../services/a2a/opencode-process.js");
+            output.log(color.dim("Starting a managed `opencode serve`..."));
+            const managed = await spawnOpenCodeServe({ cwd: ctx.cwd });
+            serverUrl = managed.url;
+            stopManagedRuntime = managed.stop;
+          }
+
+          executor = createOpenCodeHeadlessExecutor({ serverUrl, password: process.env.OPENCODE_SERVER_PASSWORD });
+          runtimeDescription = explicitUrl
+            ? `OpenCode via existing server at ${explicitUrl}`
+            : `OpenCode via a managed \`opencode serve\` at ${serverUrl}`;
+        }
+
+        let handle: Awaited<ReturnType<typeof startA2AServer>>;
+        try {
+          handle = await startA2AServer({
+            port: (ctx.flags.port as number | undefined) ?? 4173,
+            host,
+            authToken,
+            buildAgentCard: (url) => buildAgentCard({ url, agents }),
+            executor,
+          });
+        } catch (err) {
+          await stopManagedRuntime?.();
+          throw err;
+        }
+
+        const shutdown = async () => {
+          await handle.close().catch(() => {});
+          await stopManagedRuntime?.();
+        };
+        process.once("SIGINT", () => void shutdown().then(() => process.exit(0)));
+        process.once("SIGTERM", () => void shutdown().then(() => process.exit(0)));
+
+        output.log(color.bold(`aiyou-team A2A server listening at ${handle.url}`));
+        output.log(`  Agent Card: ${handle.url}/.well-known/agent-card.json`);
+        output.log(`  Skills:     ${agents.map((a) => a.name).join(", ")}`);
+        output.log(color.dim(`  Runtime:    ${runtimeDescription}`));
+        output.log(color.dim("  Ctrl+C to stop."));
+      },
+    },
+  ],
+};
+
+// ── 9d. plugin ─────────────────────────────────────────────────────
+//
+// Packages the aiyou-team roster as a real Claude Code Plugin (plan Fase 4)
+// — see init/plugin-generator.ts's header for what this adds beyond the
+// standalone `.claude/` path (`aiyoucli init --with-agents`), which stays
+// unchanged for quick, no-plugin use.
+
+const pluginCommand: Command = {
+  name: "plugin",
+  description: "Package aiyou-team as a Claude Code Plugin",
+  subcommands: [
+    {
+      name: "build",
+      description: "Generate/refresh the plugin directory (agents, hooks, MCP server)",
+      options: [
+        { name: "out", short: "o", description: "Output directory (default: <project>/.aiyou-team-plugin)", type: "string" },
+      ],
+      examples: [
+        { command: "aiyoucli plugin build", description: "Generate .aiyou-team-plugin/ from the current roster + model overrides" },
+        { command: "claude --plugin-dir ./.aiyou-team-plugin", description: "Load it in Claude Code (test before sharing)" },
+      ],
+      action: async (ctx) => {
+        const { generatePlugin } = await import("../init/plugin-generator.js");
+        const outDir = (ctx.flags.out as string | undefined) ?? join(ctx.cwd, ".aiyou-team-plugin");
+        const result = generatePlugin({ outDir });
+
+        output.log(color.bold(`Plugin written to ${result.pluginDir}`));
+        for (const file of result.files) {
+          output.log(`  ${color.dim(file.replace(result.pluginDir + "/", ""))}`);
+        }
+        output.log("");
+        output.log(`Test it:   claude --plugin-dir ${result.pluginDir}`);
+        output.log("Share it:  see https://code.claude.com/docs/en/plugin-marketplaces");
       },
     },
   ],
@@ -1601,6 +1909,9 @@ export const commands: Command[] = [
   mcpCommand,
   hooksCommand,
   configCommand,
+  agentCommand,
+  a2aCommand,
+  pluginCommand,
   statusCommand,
   doctorCommand,
   neuralCommand,
