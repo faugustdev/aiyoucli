@@ -136,7 +136,9 @@ const initCommand: Command = {
     { name: "tool", short: "t", description: "Tools to configure: claude, gemini, opencode, all (default: all)", type: "string" },
     { name: "with-mcp", description: "Also wire the MCP server (.mcp.json / opencode.json). Disabled by default — agents use the aiyoucli CLI directly via shell, avoiding the standing token cost of ~60 MCP tool schemas", type: "boolean" },
     { name: "with-hooks", description: "Wire Claude Code PreToolUse/PostToolUse hooks into .claude/settings.json for Edit|Write|MultiEdit (forwarded to `aiyoucli hooks pre-task` / `post-task`). Disabled by default — OpenCode already gets lifecycle hooks via @aiyou-dev/team; this brings Claude Code to parity when opted in", type: "boolean" },
-    { name: "with-agents", description: "Write .claude/agents/*.md for the 8 aiyou-team agents so Claude Code's `task` tool can delegate to them. Disabled by default — OpenCode already gets the agents via the @aiyou-dev/team plugin entry in opencode.json; this brings Claude Code to parity when opted in", type: "boolean" },
+    { name: "with-agents", description: "(Kept for backward compatibility — this is now the default for --tool claude.) Write .claude/agents/*.md for the 8 aiyou-team agents.", type: "boolean" },
+    { name: "skip-agents", description: "Skip writing .claude/agents/*.md — by default `init` writes them for --tool claude so Claude Code's `task` tool can delegate to aiyou-team agents immediately, no extra step", type: "boolean" },
+    { name: "skip-plugin", description: "Skip generating .aiyou-team-plugin/ (the Claude Code Plugin — same roster plus SessionStart/UserPromptSubmit routing hooks) — on by default for --tool claude alongside --skip-agents", type: "boolean" },
   ],
   examples: [
     { command: "aiyoucli init", description: "Initialize with full 4-phase bootstrap (wire + write + warm + verify)" },
@@ -145,7 +147,8 @@ const initCommand: Command = {
     { command: "aiyoucli init --tool all", description: "Initialize for all supported tools" },
     { command: "aiyoucli init --skip-verify", description: "Skip Phase 4 verification (faster init)" },
     { command: "aiyoucli init --with-mcp", description: "Also wire the MCP server (off by default)" },
-    { command: "aiyoucli init --tool claude --with-agents", description: "Initialize Claude Code with the 8 aiyou-team agent identities wired into .claude/agents/" },
+    { command: "aiyoucli init --tool claude", description: "Indexes memory, writes .claude/agents/*.md, and generates .aiyou-team-plugin/ — all by default" },
+    { command: "aiyoucli init --tool claude --skip-agents --skip-plugin", description: "Just the base settings — opt out of agents/plugin generation" },
   ],
   action: async (ctx) => {
     const cwd = ctx.cwd;
@@ -171,7 +174,15 @@ const initCommand: Command = {
     const fileResults: FileWriteResult[] = [];
     const withMcp = ctx.flags.withMcp as boolean;
     const withHooks = ctx.flags.withHooks as boolean;
-    const withAgents = ctx.flags.withAgents as boolean;
+    // Default ON for --tool claude (was opt-in via --with-agents; that flag
+    // still works but is redundant now). Claude Code has no equivalent of
+    // OpenCode's automatic @aiyou-dev/team plugin wiring, so without this a
+    // fresh `aiyoucli init` leaves Claude Code unable to see any aiyou-team
+    // agent at all — "aiyoucli reconoce mis agentes" only holds if init
+    // actually writes them. --skip-agents opts back out.
+    const withAgents = !(ctx.flags["skip-agents"] as boolean);
+    const withPlugin = !(ctx.flags["skip-plugin"] as boolean);
+    const claudeTargeted = !targets || targets.includes("claude");
 
     // 1. Generate AGENTS.md (always)
     try {
@@ -214,6 +225,36 @@ const initCommand: Command = {
       return { success: false, exitCode: 1 };
     }
 
+    // 2c. Claude Code Plugin (.aiyou-team-plugin/) — on by default alongside
+    // .claude/agents/*.md (see withPlugin above). Always overwrites (the
+    // plugin is meant to be regenerated, not hand-edited — see
+    // plugin-generator.ts), so status here is "created" vs "updated" based
+    // on whether each file existed before this run, same convention as
+    // every other writer above.
+    if (withPlugin && claudeTargeted) {
+      try {
+        const { buildPluginFiles } = await import("../init/plugin-generator.js");
+        const { existsSync, mkdirSync, writeFileSync, statSync } = await import("node:fs");
+        const pluginDir = join(cwd, ".aiyou-team-plugin");
+        for (const [relativePath, content] of Object.entries(buildPluginFiles())) {
+          const absolutePath = join(pluginDir, relativePath);
+          const existed = existsSync(absolutePath);
+          const previousBytes = existed ? statSync(absolutePath).size : 0;
+          mkdirSync(dirname(absolutePath), { recursive: true });
+          writeFileSync(absolutePath, content, "utf-8");
+          fileResults.push({
+            path: absolutePath,
+            status: existed ? "updated" : "created",
+            ...(existed ? { diff: { previousBytes, newBytes: statSync(absolutePath).size } } : {}),
+          });
+        }
+      } catch (e) {
+        // Non-fatal — the standalone .claude/ files above already give a
+        // working setup; the plugin is the "nicer" path, not the only one.
+        output.warn(`Skipped .aiyou-team-plugin/ generation: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     // Summarize: created/merged/updated = changes, skipped = no-op
     const changes = fileResults.filter((r) => r.status !== "skipped").length;
     const skipped = fileResults.filter((r) => r.status === "skipped").length;
@@ -241,6 +282,11 @@ const initCommand: Command = {
 
     for (const result of fileResults) {
       output.log(renderFileResult(result, cwd));
+    }
+
+    if (withPlugin && claudeTargeted) {
+      output.log("");
+      output.log(color.dim(`  Load the plugin:  claude --plugin-dir ${join(cwd, ".aiyou-team-plugin")}`));
     }
 
     // 2b. Phase 2 — Wire validation: probe dependencies before attempting
