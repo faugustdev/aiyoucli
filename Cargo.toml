@@ -3,7 +3,7 @@ members = ["crates/aiyoucli-napi", "crates/aiyoucli-rd"]
 resolver = "2"
 
 [workspace.package]
-version = "1.6.3"
+version = "1.7.0"
 edition = "2021"
 rust-version = "1.77"
 license = "MIT"

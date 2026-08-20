@@ -1,6 +1,6 @@
 {
   "name": "@aiyou-dev/cli-win32-x64-msvc",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "aiyoucli native binding for Windows x64 (MSVC)",
   "os": [
     "win32"

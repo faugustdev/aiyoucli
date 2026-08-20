@@ -12,6 +12,19 @@ the fact.
 
 Nothing yet.
 
+## [1.7.0] — 2026-08-20
+
+### Added
+- **A2A (Agent2Agent) protocol** — minimal `HTTP+JSON` binding hand-rolled against `a2aproject/A2A`'s `a2a.proto` (no new runtime dependencies). Agent Card at `/.well-known/agent-card.json`; `message:send`/`tasks/{id}`/`tasks/{id}:cancel`.
+  - `aiyoucli a2a card <url>` / `a2a call <url> "<msg>" --skill <id>` — client direction, works from any host with shell access today.
+  - `aiyoucli a2a serve [--agent <name>] [--runtime claude|opencode] [--auth-token <token>]` — server direction, exposing aiyou-team's own agents. `--runtime claude` (default) dispatches via `claude -p --agent <skill>`; `--runtime opencode` dispatches through a running (or auto-managed) `opencode serve`'s HTTP API — `opencode run --agent` can't address aiyou-team's runtime-registered subagents directly, so this goes under the CLI to `POST /session/{id}/message` with the resolved canonical agent id.
+  - Secondary `a2a` MCP tool (`card`/`call` modes) for MCP-only hosts, per the existing mcp2cli convention.
+- `aiyoucli agent list` / `agent set-model <agent> <model>` — per-agent model overrides (`Config.agents[name].model`), previously hardcoded by tier. Threaded into Claude Code's `.claude/agents/*.md` generation and, as a fallback beneath any explicit `aiyou-team.json` override, into OpenCode's auto model-selection.
+- `aiyoucli plugin build [--out <dir>]` — packages the aiyou-team roster as a real Claude Code Plugin (`.claude-plugin/plugin.json`, `agents/*.md`, `hooks/hooks.json`, `.mcp.json`), reusing the same generators as the standalone `.claude/` path. Adds two new hooks beyond what `--with-hooks` already covered: `SessionStart` (roster + CLI-preference reminder as initial context) and `UserPromptSubmit` (routing hint from the existing Q-learning router, emitted only above a confidence threshold to avoid noise).
+
+### Fixed
+- A2A server: `message:send` now validates a request's `skillId` against what the server actually publishes (`aiyoucli a2a serve --agent <name>`'s filter) before dispatch, server-side — found via `/security-review` on this same change before release. Previously the filter only shaped the advertised Agent Card; any caller with the server's auth token could still request a different, more privileged agent (e.g. `coding-leader`, with Bash/Edit/Write) than the one the operator intended to expose.
+
 ## [1.6.3] — 2026-08-17
 
 ### Added
