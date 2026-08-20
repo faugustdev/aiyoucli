@@ -1,6 +1,6 @@
 {
   "name": "@aiyou-dev/cli",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "AI agent CLI with Rust-powered vector intelligence",
   "type": "module",
   "main": "dist/index.js",
@@ -33,11 +33,11 @@
     ]
   },
   "optionalDependencies": {
-    "@aiyou-dev/cli-darwin-arm64": "1.7.0",
-    "@aiyou-dev/cli-darwin-x64": "1.7.0",
-    "@aiyou-dev/cli-linux-arm64-gnu": "1.7.0",
-    "@aiyou-dev/cli-linux-x64-gnu": "1.7.0",
-    "@aiyou-dev/cli-win32-x64-msvc": "1.7.0",
+    "@aiyou-dev/cli-darwin-arm64": "1.7.1",
+    "@aiyou-dev/cli-darwin-x64": "1.7.1",
+    "@aiyou-dev/cli-linux-arm64-gnu": "1.7.1",
+    "@aiyou-dev/cli-linux-x64-gnu": "1.7.1",
+    "@aiyou-dev/cli-win32-x64-msvc": "1.7.1",
     "@aiyou-dev/team": "^0.1.16"
   },
   "files": [

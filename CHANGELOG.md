@@ -12,6 +12,11 @@ the fact.
 
 Nothing yet.
 
+## [1.7.1] — 2026-08-20
+
+### Changed
+- `aiyoucli init --tool claude` now writes `.claude/agents/*.md` **and** generates `.aiyou-team-plugin/` by default — both were opt-in (`--with-agents`, a separate `aiyoucli plugin build` call) since v1.7.0, which meant a plain `init` left Claude Code unable to see any aiyou-team agent at all. `--with-agents` still works (now redundant). New `--skip-agents` / `--skip-plugin` opt out, matching the existing `--skip-index`/`--skip-team`/etc. convention. Memory indexing was already on by default (`--skip-index` is the existing opt-out) — unchanged.
+
 ## [1.7.0] — 2026-08-20
 
 ### Added
