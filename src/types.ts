@@ -71,7 +71,16 @@ export interface Config {
   llm?: LLMConfig;
   hooks?: HooksConfig;
   routing?: RoutingConfig;
+  agents?: AgentsConfig;
 }
+
+/**
+ * Per-agent overrides — keyed by agent name (`coding-leader`, `reviewer`, ...).
+ * Currently only `model` is settable; unset fields fall back to the tier-based
+ * default (`modelFromTier` in `init/claude-agents.ts` for Claude Code,
+ * `AGENT_MODEL_REQUIREMENTS`-driven auto-selection in aiyou-team for OpenCode).
+ */
+export type AgentsConfig = Record<string, { model?: string }>;
 
 export interface RoutingConfig {
   default_mode?: string;

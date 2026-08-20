@@ -190,6 +190,8 @@ ${
 | Codebase search / trace / graph | \`aiyoucli codebase search\|trace\|query\|schema\|snippet\|architecture <project> ...\` — see "Code search" below |
 | Skills | \`aiyoucli skills sync\|list\|detect\` |
 | Git context | \`aiyoucli gcc\` |
+| Per-agent model | \`aiyoucli agent list\`, \`agent set-model <agent> <model>\` |
+| A2A (remote agent) | \`aiyoucli a2a card <url>\`, \`a2a call <url> "<msg>" --skill <id>\` |
 
 Run \`aiyoucli --help\`, or \`--help\` on any subcommand, for the full list.
 `;

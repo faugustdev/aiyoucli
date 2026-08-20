@@ -1061,6 +1061,187 @@ const configCommand: Command = {
   ],
 };
 
+// ── 9b. agent ──────────────────────────────────────────────────────
+
+// Sugar over `config get/set agents.<name>.model` — no new MCP tool, reuses
+// config_get/config_set. See init/claude-agents.ts:AGENT_DEFS for the roster
+// and modelFromTier() for the tier-based default a pinned model overrides.
+
+const agentCommand: Command = {
+  name: "agent",
+  description: "Per-agent configuration (model overrides)",
+  subcommands: [
+    {
+      name: "list",
+      description: "List the aiyou-team roster with each agent's effective model",
+      action: async () => {
+        ensureTools();
+        const { AGENT_DEFS, modelFromTier } = await import("../init/claude-agents.js");
+        const result = await callTool("config_get", { key: "agents" });
+        const raw = result.content[0]?.text ?? "{}";
+        let overrides: Record<string, { model?: string }> = {};
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") overrides = parsed;
+        } catch {}
+
+        for (const def of AGENT_DEFS) {
+          const pinned = overrides[def.name]?.model;
+          const effective = pinned ?? modelFromTier(def.tier);
+          const source = pinned ? "pinned" : `tier default (${def.tier})`;
+          output.log(`${color.bold(def.name.padEnd(20))} ${effective.padEnd(10)} ${color.dim(source)}`);
+        }
+      },
+    },
+    {
+      name: "set-model",
+      description: "Pin a model for one agent, overriding its tier default",
+      examples: [
+        { command: "aiyoucli agent set-model coding-leader opus", description: "Pin coding-leader to opus" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const agent = ctx.args[0];
+        const model = ctx.args[1];
+        if (!agent || !model) {
+          output.error("Usage: aiyoucli agent set-model <agent> <model>");
+          return;
+        }
+        const { AGENT_DEFS } = await import("../init/claude-agents.js");
+        if (!AGENT_DEFS.some((d) => d.name === agent)) {
+          output.error(`Unknown agent: ${agent}. Known: ${AGENT_DEFS.map((d) => d.name).join(", ")}`);
+          return;
+        }
+        const result = await callTool("config_set", { key: `agents.${agent}.model`, value: model });
+        printResult(result);
+        output.log(color.dim("Re-run `aiyoucli init --tool claude --force` to regenerate .claude/agents/ with this model."));
+      },
+    },
+  ],
+};
+
+// ── 9c. a2a ────────────────────────────────────────────────────────
+//
+// A2A (Agent2Agent) protocol. `card`/`call` (client direction, consuming a
+// remote A2A agent) follow the mcp2cli principle — see codebase-project-
+// tools.ts's header comment — and go through the same `a2a` MCP tool the
+// MCP-protocol path uses. `serve` (server direction, exposing aiyou-team's
+// own agents) talks to services/a2a/server.ts directly — long-running
+// processes don't fit the request/response `callTool()` shape the other
+// subcommands use (same reason `mcp start` calls startMCPServer() directly
+// instead of going through a tool).
+//
+// `serve`'s dispatch to a real agent only works for Claude Code today
+// (`claude -p --agent <skill>` — see executors/claude-headless.ts). OpenCode
+// isn't wired: `opencode run --agent <name>` doesn't resolve the names
+// @aiyou-dev/team registers at runtime (confirmed empirically during the
+// Fase 3 spike — see that file's header for the follow-up needed).
+
+const a2aCommand: Command = {
+  name: "a2a",
+  description: "A2A (Agent2Agent) protocol — client (card/call) and server (serve)",
+  subcommands: [
+    {
+      name: "card",
+      description: "Fetch a remote agent's Agent Card",
+      examples: [
+        { command: "aiyoucli a2a card http://localhost:4173", description: "Show what a remote A2A agent offers" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const url = ctx.args[0];
+        if (!url) { output.error("Usage: aiyoucli a2a card <url>"); return; }
+        const result = await callTool("a2a", { mode: "card", url });
+        printJson(result);
+      },
+    },
+    {
+      name: "call",
+      description: "Send a message to a remote A2A agent and wait for the task to complete",
+      options: [
+        { name: "skill", short: "s", description: "Target skill/agent id on the remote card", type: "string" },
+        { name: "auth-token", description: "Bearer token, if the remote server requires one", type: "string" },
+        { name: "timeout", description: "Poll timeout in ms (default 120000)", type: "number" },
+      ],
+      examples: [
+        {
+          command: 'aiyoucli a2a call http://localhost:4173 "review this diff" --skill reviewer',
+          description: "Delegate to a specific remote skill and wait for the result",
+        },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const url = ctx.args[0];
+        const message = ctx.args[1];
+        if (!url || !message) {
+          output.error('Usage: aiyoucli a2a call <url> "<message>" [--skill <id>] [--auth-token <token>]');
+          return;
+        }
+        const result = await callTool("a2a", {
+          mode: "call",
+          url,
+          message,
+          skill_id: ctx.flags.skill,
+          auth_token: ctx.flags["auth-token"],
+          timeout_ms: ctx.flags.timeout,
+        });
+        printJson(result);
+      },
+    },
+    {
+      name: "serve",
+      description: "Serve aiyou-team's agents over A2A (Claude Code runtime only, for now)",
+      options: [
+        { name: "port", short: "p", description: "Port to listen on (default: 4173)", type: "number" },
+        { name: "host", description: "Host to bind (default: 127.0.0.1 — do not change without --auth-token)", type: "string" },
+        { name: "auth-token", description: "Require this bearer token on every route except the Agent Card", type: "string" },
+        { name: "agent", short: "a", description: "Publish only this agent as a skill (repeatable). Default: all 8.", type: "array" },
+      ],
+      examples: [
+        { command: "aiyoucli a2a serve", description: "Publish all 8 aiyou-team agents on :4173, localhost-only, no auth" },
+        { command: "aiyoucli a2a serve --agent reviewer --auth-token $(openssl rand -hex 16)", description: "Publish just reviewer, with auth" },
+      ],
+      action: async (ctx) => {
+        const { AGENT_DEFS } = await import("../init/claude-agents.js");
+        const { startA2AServer } = await import("../services/a2a/server.js");
+        const { buildAgentCard } = await import("../services/a2a/registry.js");
+        const { createClaudeHeadlessExecutor } = await import("../services/a2a/executors/claude-headless.js");
+
+        const requested = ([] as unknown[]).concat(ctx.flags.agent ?? []).map(String);
+        const agents = requested.length > 0 ? AGENT_DEFS.filter((d) => requested.includes(d.name)) : AGENT_DEFS;
+        if (agents.length === 0) {
+          output.error(`Unknown agent(s): ${requested.join(", ")}. Known: ${AGENT_DEFS.map((d) => d.name).join(", ")}`);
+          return;
+        }
+
+        const authToken = ctx.flags["auth-token"] as string | undefined;
+        const host = (ctx.flags.host as string | undefined) ?? "127.0.0.1";
+        if (!authToken) {
+          output.log(color.yellow("⚠ No --auth-token set.") + " Every route except the Agent Card is unauthenticated. Do not bind beyond localhost like this.");
+        }
+        if (host !== "127.0.0.1" && host !== "localhost" && !authToken) {
+          output.error("Refusing to bind a non-localhost host without --auth-token — this would let anyone on the network run aiyou-team agents (including Bash/Edit/Write-capable ones) unauthenticated.");
+          return;
+        }
+
+        const handle = await startA2AServer({
+          port: (ctx.flags.port as number | undefined) ?? 4173,
+          host,
+          authToken,
+          buildAgentCard: (url) => buildAgentCard({ url, agents }),
+          executor: createClaudeHeadlessExecutor({ cwd: ctx.cwd }),
+        });
+
+        output.log(color.bold(`aiyou-team A2A server listening at ${handle.url}`));
+        output.log(`  Agent Card: ${handle.url}/.well-known/agent-card.json`);
+        output.log(`  Skills:     ${agents.map((a) => a.name).join(", ")}`);
+        output.log(color.dim("  Runtime:    Claude Code headless (claude -p --agent <skill>). OpenCode isn't wired yet."));
+        output.log(color.dim("  Ctrl+C to stop."));
+      },
+    },
+  ],
+};
+
 // ── 10. status ─────────────────────────────────────────────────────
 
 const statusCommand: Command = {
@@ -1601,6 +1782,8 @@ export const commands: Command[] = [
   mcpCommand,
   hooksCommand,
   configCommand,
+  agentCommand,
+  a2aCommand,
   statusCommand,
   doctorCommand,
   neuralCommand,

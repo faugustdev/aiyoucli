@@ -76,6 +76,7 @@ function mergeConfig(partial: Partial<Config>): Config {
     llm: partial.llm ? { ...partial.llm } : undefined,
     hooks: partial.hooks ? { ...partial.hooks } : undefined,
     routing: partial.routing ? { ...partial.routing } : undefined,
+    agents: partial.agents ? { ...partial.agents } : undefined,
   };
   return applyEnvOverrides(merged);
 }

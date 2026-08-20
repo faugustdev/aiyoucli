@@ -26,6 +26,7 @@ import { graphTools } from "./graph-tools.js";
 import { codebaseProjectTools } from "./codebase-project-tools.js";
 import { codebaseQueryTools } from "./codebase-query-tools.js";
 import { codebaseMaintenanceTools } from "./codebase-maintenance-tools.js";
+import { a2aTools } from "./a2a-tools.js";
 
 export function registerAllTools(): void {
   registry.registerAll(memoryTools);
@@ -51,4 +52,5 @@ export function registerAllTools(): void {
   registry.registerAll(codebaseProjectTools);
   registry.registerAll(codebaseQueryTools);
   registry.registerAll(codebaseMaintenanceTools);
+  registry.registerAll(a2aTools);
 }

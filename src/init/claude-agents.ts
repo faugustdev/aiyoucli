@@ -429,14 +429,19 @@ See @.aiyoucli/agents.dsi.toon for the full aiyou-team roster and tier table.
 /**
  * Build the full markdown content for a `.claude/agents/<name>.md` file.
  * Returns YAML frontmatter followed by the agent's prompt body.
+ *
+ * `overrideModel` — user-pinned model from `Config.agents[def.name].model`
+ * (see `aiyoucli.config.json` / `aiyoucli agent set-model`). When set, it wins
+ * over the tier default so models aren't hardcoded by tier alone — callers
+ * are responsible for resolving the override (see `settings-generator.ts`).
  */
-export function buildClaudeAgentFile(def: AgentDef): string {
+export function buildClaudeAgentFile(def: AgentDef, overrideModel?: string): string {
   const frontmatter = [
     "---",
     `name: ${def.name}`,
     `description: ${def.description}`,
     `tools: ${def.tools.join(", ")}`,
-    `model: ${modelFromTier(def.tier)}`,
+    `model: ${overrideModel ?? modelFromTier(def.tier)}`,
     "---",
     "",
   ].join("\n");
