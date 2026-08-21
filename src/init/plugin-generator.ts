@@ -39,9 +39,10 @@
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { AGENT_DEFS, buildClaudeAgentFile } from "./claude-agents.js";
+import { AGENT_DEFS, buildClaudeAgentFile, buildDelegatingPromptBody } from "./claude-agents.js";
 import { buildMcpJson, buildClaudeSettings } from "./settings-generator.js";
 import { loadConfig } from "../config.js";
+import { resolveRuntimeAndModel } from "../orchestrate/dispatch.js";
 import { packageVersion } from "../version.js";
 
 export interface GeneratePluginOptions {
@@ -113,7 +114,11 @@ export function buildPluginFiles(): Record<string, string> {
   };
 
   for (const def of AGENT_DEFS) {
-    files[`agents/${def.name}.md`] = buildClaudeAgentFile(def, agentOverrides?.[def.name]?.model);
+    // Delegates to agy/opencode/mmx by default when installed — see
+    // buildDelegatingPromptBody's header for the recursion-safety invariant.
+    const { runtime } = resolveRuntimeAndModel(def.name);
+    const delegatingDef = { ...def, promptBody: buildDelegatingPromptBody(def, runtime) };
+    files[`agents/${def.name}.md`] = buildClaudeAgentFile(delegatingDef, agentOverrides?.[def.name]?.model);
   }
 
   return files;

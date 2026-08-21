@@ -80,12 +80,13 @@ export interface Config {
  * `init/claude-agents.ts` for Claude Code, `AGENT_MODEL_REQUIREMENTS`-driven
  * auto-selection in aiyou-team for OpenCode). `runtime` unset falls back to
  * `DEFAULT_ORCHESTRATION` in `orchestrate/defaults.ts` — only consulted by
- * `aiyoucli orchestrate`, which agent runs which of the three CLI runtimes
- * (claude/opencode/agy).
+ * `aiyoucli orchestrate`, which agent runs which of the four CLI runtimes
+ * (claude/opencode/agy/mmx).
  */
 export type AgentsConfig = Record<string, { model?: string; runtime?: OrchestrationRuntime }>;
 
-export type OrchestrationRuntime = "claude" | "opencode" | "agy";
+/** "mmx" (MiniMax CLI) has no file/tool access of its own — see mmx-headless.ts's header. Not assigned by default to any file-reading agent. */
+export type OrchestrationRuntime = "claude" | "opencode" | "agy" | "mmx";
 
 export interface RoutingConfig {
   default_mode?: string;

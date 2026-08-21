@@ -15,6 +15,7 @@ import { DEFAULT_ORCHESTRATION } from "./defaults.js";
 import { createClaudeHeadlessExecutor } from "../services/a2a/executors/claude-headless.js";
 import { createOpenCodeHeadlessExecutor } from "../services/a2a/executors/opencode-headless.js";
 import { createAgyHeadlessExecutor } from "../services/a2a/executors/agy-headless.js";
+import { createMmxHeadlessExecutor } from "../services/a2a/executors/mmx-headless.js";
 import { spawnOpenCodeServe, type OpenCodeServeHandle } from "../services/a2a/opencode-process.js";
 import type { Message, Task } from "../services/a2a/types.js";
 
@@ -94,6 +95,9 @@ export async function dispatchTask(task: OrchestrationTask, opts?: DispatchOptio
         break;
       case "agy":
         executor = createAgyHeadlessExecutor({ cwd: opts?.cwd, timeoutMs: opts?.timeoutMs, model });
+        break;
+      case "mmx":
+        executor = createMmxHeadlessExecutor({ cwd: opts?.cwd, timeoutMs: opts?.timeoutMs, model });
         break;
     }
 

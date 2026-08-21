@@ -16,8 +16,9 @@ import { join, basename, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { generateStatuslineScript } from "../statusline/generator.js";
 import { distillMarkdown } from "../napi/index.js";
-import { AGENT_DEFS, buildClaudeAgentFile, getAgentDir } from "./claude-agents.js";
+import { AGENT_DEFS, buildClaudeAgentFile, buildDelegatingPromptBody, getAgentDir } from "./claude-agents.js";
 import { loadConfig } from "../config.js";
+import { resolveRuntimeAndModel } from "../orchestrate/dispatch.js";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -345,7 +346,12 @@ function generateClaudeAgents(projectRoot: string, force: boolean): FileWriteRes
   const results: FileWriteResult[] = [];
   for (const def of AGENT_DEFS) {
     const filePath = join(agentDir, `${def.name}.md`);
-    const content = buildClaudeAgentFile(def, agentOverrides?.[def.name]?.model);
+    // Delegates to agy/opencode/mmx by default when that runtime's CLI is
+    // available — see buildDelegatingPromptBody's header for the recursion-
+    // safety invariant (never wraps a "claude"-resolved agent).
+    const { runtime } = resolveRuntimeAndModel(def.name);
+    const delegatingDef = { ...def, promptBody: buildDelegatingPromptBody(def, runtime) };
+    const content = buildClaudeAgentFile(delegatingDef, agentOverrides?.[def.name]?.model);
 
     if (force && existsSync(filePath)) {
       const previousBytes = statSafe(filePath);

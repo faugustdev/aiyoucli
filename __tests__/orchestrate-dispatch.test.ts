@@ -1,12 +1,12 @@
 /**
  * orchestrate/dispatch.ts — vitest.
  *
- * Mocks all three executors (createClaudeHeadlessExecutor/
- * createOpenCodeHeadlessExecutor/createAgyHeadlessExecutor) and
- * spawnOpenCodeServe — this file tests dispatch.ts's own logic (runtime/
- * model resolution precedence, agent validation, result shaping, batch
- * concurrency/cleanup), not the executors themselves (those have their own
- * test files with fake binaries).
+ * Mocks all four executors (createClaudeHeadlessExecutor/
+ * createOpenCodeHeadlessExecutor/createAgyHeadlessExecutor/
+ * createMmxHeadlessExecutor) and spawnOpenCodeServe — this file tests
+ * dispatch.ts's own logic (runtime/model resolution precedence, agent
+ * validation, result shaping, batch concurrency/cleanup), not the executors
+ * themselves (those have their own test files with fake binaries).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -23,15 +23,20 @@ const opencodeExecutor = vi.fn(async ({ skillId, message }: any) => [
 const agyExecutor = vi.fn(async ({ skillId, message }: any) => [
   { text: `agy:${skillId}:${message.parts[0].text}` },
 ]);
+const mmxExecutor = vi.fn(async ({ skillId, message }: any) => [
+  { text: `mmx:${skillId}:${message.parts[0].text}` },
+]);
 
 const createClaudeHeadlessExecutor = vi.fn(() => claudeExecutor);
 const createOpenCodeHeadlessExecutor = vi.fn(() => opencodeExecutor);
 const createAgyHeadlessExecutor = vi.fn(() => agyExecutor);
+const createMmxHeadlessExecutor = vi.fn(() => mmxExecutor);
 const spawnOpenCodeServe = vi.fn(async () => ({ url: "http://127.0.0.1:9999", stop: vi.fn(async () => {}) }));
 
 vi.mock("../src/services/a2a/executors/claude-headless.js", () => ({ createClaudeHeadlessExecutor }));
 vi.mock("../src/services/a2a/executors/opencode-headless.js", () => ({ createOpenCodeHeadlessExecutor }));
 vi.mock("../src/services/a2a/executors/agy-headless.js", () => ({ createAgyHeadlessExecutor }));
+vi.mock("../src/services/a2a/executors/mmx-headless.js", () => ({ createMmxHeadlessExecutor }));
 vi.mock("../src/services/a2a/opencode-process.js", () => ({ spawnOpenCodeServe }));
 
 const { resolveRuntimeAndModel, dispatchTask, runOrchestrationPlan } = await import("../src/orchestrate/dispatch.js");
@@ -44,9 +49,11 @@ beforeEach(() => {
   claudeExecutor.mockClear();
   opencodeExecutor.mockClear();
   agyExecutor.mockClear();
+  mmxExecutor.mockClear();
   createClaudeHeadlessExecutor.mockClear();
   createOpenCodeHeadlessExecutor.mockClear();
   createAgyHeadlessExecutor.mockClear();
+  createMmxHeadlessExecutor.mockClear();
   spawnOpenCodeServe.mockClear();
 });
 
@@ -131,6 +138,16 @@ describe("dispatchTask", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toMatch(/opencodeServerUrl/);
     expect(createOpenCodeHeadlessExecutor).not.toHaveBeenCalled();
+  });
+
+  it("dispatches to createMmxHeadlessExecutor when a config override sets runtime: mmx (no agent defaults to it)", async () => {
+    useProjectConfig({ "principal-advisor": { runtime: "mmx", model: "MiniMax-M3" } });
+    const result = await dispatchTask({ agent: "principal-advisor", task: "opus vs sonnet for this" });
+    expect(result.status).toBe("completed");
+    expect(result.runtime).toBe("mmx");
+    expect(result.model).toBe("MiniMax-M3");
+    expect(result.output).toBe("mmx:principal-advisor:opus vs sonnet for this");
+    expect(createMmxHeadlessExecutor).toHaveBeenCalledWith(expect.objectContaining({ model: "MiniMax-M3" }));
   });
 
   it("dispatches to createClaudeHeadlessExecutor when a config override sets runtime: claude", async () => {
