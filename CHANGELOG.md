@@ -12,6 +12,16 @@ the fact.
 
 Nothing yet.
 
+## [1.8.0] — 2026-08-21
+
+### Added
+- **`aiyoucli orchestrate`** — local, no-network dispatch of aiyou-team agents across three CLI runtimes on the same machine: Claude Code (`claude -p`), OpenCode (`opencode serve`'s HTTP API), and `agy` (Google Antigravity CLI). `orchestrate task --agent <name> --task "<text>"` runs one ad-hoc task; `orchestrate run <plan.json>` runs a batch in parallel from a `{"tasks":[{"agent":"...","task":"..."}]}` manifest. Default runtime assignment: `coding-leader`/`coding-executor` → opencode (need Edit/Write/Bash), `codebase-explorer`/`reviewer`/`principal-advisor` → agy with `gemini-3.7-flash-low` (cheap, read-only), `web-researcher`/`multimodal-looker` → opencode. `coordination-leader` is not dispatchable — it's the interactive session itself. `aiyoucli agent set-runtime <agent> <claude|opencode|agy|mmx>` overrides per agent; `agent list` shows the effective runtime.
+- **`mmx` (MiniMax CLI) as a fourth orchestrate runtime.** Unlike agy/opencode, `mmx` has no file/tool access of its own (pure chat-completion client) — not assigned by default to any agent that reads code; opt-in only via `agent set-runtime`. ⚠️ Its response-JSON parser (`services/a2a/executors/mmx-headless.ts`) was written from `mmx text chat --help`'s documented flags only — never confirmed against a real authenticated call (`mmx auth login` wasn't available when this was built). Verify before relying on it for anything real.
+- **`aiyoucli init --tool claude` now delegates to agy/opencode/mmx by default, no flag.** When an agent's resolved orchestrate runtime isn't `claude`, its generated `.claude/agents/<name>.md` (and the Claude Code Plugin's copy) is wrapped with an instruction to check `command -v <runtime>` and, if found, shell out to `aiyoucli orchestrate task` and relay the result — falling back to running on Claude's own model if the runtime isn't installed or `orchestrate` errors. Claude-routed agents are never wrapped (their prompt is untouched) — this is a hard safety invariant, not just a default: wrapping one would cause infinite recursion (`orchestrate`'s `claude` branch reloads the same generated file), and is covered by a dedicated regression test.
+
+### Fixed
+- README.md/README.es.md corrected to match actual code after an end-to-end audit: real CLI/MCP-tool counts, `init`'s real default behavior, several undocumented commands (`a2a`, `agent`, `plugin`, `daemon`, `update`, `pdf2md`, `team`), a stale LOC/binary-size figure, an overclaimed supported-languages list, and `.mcp.json`/`opencode.json` examples that didn't match what the generators actually produce. `README.es.md` was a stale pre-consolidation snapshot contradicting the English doc — regenerated from scratch. `rd-tools.ts` (8 MCP tools, fully coded but never registered — confirmed via grep) is no longer advertised in the architecture diagram; see ROADMAP.md for the decision on finishing it.
+
 ## [1.7.1] — 2026-08-20
 
 ### Changed
