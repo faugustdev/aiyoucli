@@ -1154,10 +1154,11 @@ const agentCommand: Command = {
   subcommands: [
     {
       name: "list",
-      description: "List the aiyou-team roster with each agent's effective model",
+      description: "List the aiyou-team roster with each agent's effective model + orchestrate runtime",
       action: async () => {
         ensureTools();
         const { AGENT_DEFS, modelFromTier } = await import("../init/claude-agents.js");
+        const { resolveRuntimeAndModel } = await import("../orchestrate/dispatch.js");
         const result = await callTool("config_get", { key: "agents" });
         const raw = result.content[0]?.text ?? "{}";
         let overrides: Record<string, { model?: string }> = {};
@@ -1170,7 +1171,11 @@ const agentCommand: Command = {
           const pinned = overrides[def.name]?.model;
           const effective = pinned ?? modelFromTier(def.tier);
           const source = pinned ? "pinned" : `tier default (${def.tier})`;
-          output.log(`${color.bold(def.name.padEnd(20))} ${effective.padEnd(10)} ${color.dim(source)}`);
+          const runtimeLabel =
+            def.name === "coordination-leader" ? "n/a (not dispatchable)" : resolveRuntimeAndModel(def.name).runtime;
+          output.log(
+            `${color.bold(def.name.padEnd(20))} ${effective.padEnd(10)} ${color.dim(source.padEnd(22))} orchestrate: ${color.cyan(String(runtimeLabel))}`
+          );
         }
       },
     },
@@ -1196,6 +1201,37 @@ const agentCommand: Command = {
         const result = await callTool("config_set", { key: `agents.${agent}.model`, value: model });
         printResult(result);
         output.log(color.dim("Re-run `aiyoucli init --tool claude --force` to regenerate .claude/agents/ with this model."));
+      },
+    },
+    {
+      name: "set-runtime",
+      description: "Pin which CLI runtime `aiyoucli orchestrate` uses for one agent (claude|opencode|agy)",
+      examples: [
+        { command: "aiyoucli agent set-runtime reviewer opencode", description: "Move reviewer off its agy default" },
+      ],
+      action: async (ctx) => {
+        ensureTools();
+        const agent = ctx.args[0];
+        const runtime = ctx.args[1];
+        if (!agent || !runtime) {
+          output.error("Usage: aiyoucli agent set-runtime <agent> <claude|opencode|agy>");
+          return;
+        }
+        const { AGENT_DEFS } = await import("../init/claude-agents.js");
+        if (!AGENT_DEFS.some((d) => d.name === agent)) {
+          output.error(`Unknown agent: ${agent}. Known: ${AGENT_DEFS.map((d) => d.name).join(", ")}`);
+          return;
+        }
+        if (agent === "coordination-leader") {
+          output.error("coordination-leader is not dispatchable by orchestrate — it's the interactive Claude Code session itself.");
+          return;
+        }
+        if (!["claude", "opencode", "agy"].includes(runtime)) {
+          output.error(`Invalid runtime: ${runtime}. Must be one of: claude, opencode, agy`);
+          return;
+        }
+        const result = await callTool("config_set", { key: `agents.${agent}.runtime`, value: runtime });
+        printResult(result);
       },
     },
   ],
@@ -1410,6 +1446,102 @@ const pluginCommand: Command = {
         output.log("");
         output.log(`Test it:   claude --plugin-dir ${result.pluginDir}`);
         output.log("Share it:  see https://code.claude.com/docs/en/plugin-marketplaces");
+      },
+    },
+  ],
+};
+
+// ── 9e. orchestrate ───────────────────────────────────────────────
+//
+// Local, no-network multi-runtime dispatch (plan: sleepy-singing-lobster,
+// "Plan Master 2") — unlike a2a, this never touches HTTP; it calls the same
+// TaskExecutors directly. See orchestrate/dispatch.ts for the actual logic;
+// this block is CLI plumbing only (arg parsing, result printing).
+
+function printOrchestrationResults(results: Array<{ agent: string; runtime: string; model?: string; status: string; output?: string; error?: string; durationMs: number }>): boolean {
+  for (const r of results) {
+    const statusLabel = r.status === "completed" ? color.green("✓ completed") : color.red("✗ failed");
+    output.log(
+      `${color.bold(r.agent.padEnd(20))} ${r.runtime.padEnd(10)} ${(r.model ?? "-").padEnd(24)} ${statusLabel}  ${color.dim(`${r.durationMs}ms`)}`
+    );
+  }
+  output.log("");
+  for (const r of results) {
+    output.log(color.bold(`── ${r.agent} ──`));
+    if (r.status === "completed") {
+      output.log(r.output || color.dim("(empty response)"));
+    } else {
+      output.error(r.error ?? "unknown error");
+    }
+    output.log("");
+  }
+  return results.every((r) => r.status === "completed");
+}
+
+const orchestrateCommand: Command = {
+  name: "orchestrate",
+  description: "Dispatch tasks to the aiyou-team roster across claude/opencode/agy runtimes, locally, no network",
+  subcommands: [
+    {
+      name: "task",
+      description: "Dispatch a single ad-hoc task to one agent",
+      options: [
+        { name: "agent", short: "a", description: "Agent name (see `aiyoucli agent list`)", type: "string", required: true },
+        { name: "task", short: "t", description: "Task description", type: "string", required: true },
+      ],
+      examples: [
+        { command: 'aiyoucli orchestrate task --agent reviewer --task "Review the diff in src/foo.ts"', description: "One task, one agent" },
+      ],
+      action: async (ctx) => {
+        const agent = ctx.flags.agent as string | undefined;
+        const task = ctx.flags.task as string | undefined;
+        if (!agent || !task) {
+          output.error("Usage: aiyoucli orchestrate task --agent <name> --task \"<text>\"");
+          return;
+        }
+        const { runOrchestrationPlan } = await import("../orchestrate/dispatch.js");
+        const results = await runOrchestrationPlan([{ agent, task }], { cwd: ctx.cwd });
+        const ok = printOrchestrationResults(results);
+        if (!ok) return { success: false, exitCode: 1 };
+      },
+    },
+    {
+      name: "run",
+      description: 'Run a batch of tasks in parallel from a JSON manifest: {"tasks":[{"agent":"...","task":"..."}]}',
+      examples: [
+        { command: "aiyoucli orchestrate run plan.json", description: "Fan out every task in the manifest concurrently" },
+      ],
+      action: async (ctx) => {
+        const path = ctx.args[0];
+        if (!path) {
+          output.error("Usage: aiyoucli orchestrate run <plan.json>");
+          return;
+        }
+        const { readFileSync } = await import("node:fs");
+        let manifest: { tasks?: Array<{ agent?: string; task?: string }> };
+        try {
+          manifest = JSON.parse(readFileSync(path, "utf-8"));
+        } catch (e) {
+          output.error(`Failed to read/parse ${path}: ${e instanceof Error ? e.message : String(e)}`);
+          return { success: false, exitCode: 1 };
+        }
+        if (!Array.isArray(manifest.tasks) || manifest.tasks.length === 0) {
+          output.error(`${path} must have a non-empty "tasks" array: {"tasks":[{"agent":"...","task":"..."}]}`);
+          return { success: false, exitCode: 1 };
+        }
+        const invalid = manifest.tasks.filter((t) => !t.agent || !t.task);
+        if (invalid.length > 0) {
+          output.error(`${invalid.length} task(s) missing "agent" or "task"`);
+          return { success: false, exitCode: 1 };
+        }
+
+        const { runOrchestrationPlan } = await import("../orchestrate/dispatch.js");
+        const results = await runOrchestrationPlan(
+          manifest.tasks as Array<{ agent: string; task: string }>,
+          { cwd: ctx.cwd }
+        );
+        const ok = printOrchestrationResults(results);
+        if (!ok) return { success: false, exitCode: 1 };
       },
     },
   ],
@@ -1958,6 +2090,7 @@ export const commands: Command[] = [
   agentCommand,
   a2aCommand,
   pluginCommand,
+  orchestrateCommand,
   statusCommand,
   doctorCommand,
   neuralCommand,

@@ -87,6 +87,16 @@ writeups worth keeping intact, not gap-doc corrections.
 
 - **Deep research (`rd_*`) tools** — decided 2026-08-20, not scoped yet. `src/mcp/tools/rd-tools.ts` (8 tools) is complete but was never registered in `registerAllTools()` — confirmed unreachable via grep. It also depends on a native `aiyoucli-rd` binary that the build pipeline never compiles (`build:rs` only builds `aiyoucli-napi`) and no `npm/*/package.json` ever ships, so registering it as-is would throw for every real user. **Explicit constraint: if this ever gets implemented, fold `rd.rs`'s logic into `aiyoucli-napi` — do not ship a second NAPI crate/binary.** Separately, `src/rd/engine.ts`'s `search()` is a hardcoded stub (`results: []`) — the NAPI consolidation alone doesn't make this feature real; the actual search-result-processing logic still needs writing. Until one of those two things happens, `README.md` does not mention this feature (removed 2026-08-20 — was previously advertised as a live capability).
 
+- **OpenCode-side delegate-by-default** — `aiyoucli init --tool claude` now wraps agy/
+  opencode/mmx-routed agents' `.claude/agents/*.md` with a "delegate to `aiyoucli
+  orchestrate` first" instruction by default (2026-08-21, see CHANGELOG). The same intent
+  applies to OpenCode — today, when OpenCode dispatches to a roster agent, it runs on
+  whatever model `aiyou-team/src/adapters/opencode/model-selector.ts` resolves, never
+  auto-delegating to `agy`/`mmx`. Wiring the equivalent behavior means editing aiyou-team's
+  prompt projection (`aiyou-team/src/adapters/opencode/projection.ts`), a different
+  package/repo from aiyoucli — explicitly out of scope for the aiyoucli-side change, not
+  built yet.
+
 Otherwise empty right now — the three items that were here (memory export/
 import, fish/powershell completions, real daemon/update) all shipped
 2026-08-16, moved to "Already done" above. Working the confirmed-bugs list

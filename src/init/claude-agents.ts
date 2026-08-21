@@ -456,3 +456,55 @@ export function buildClaudeAgentFile(def: AgentDef, overrideModel?: string): str
 export function getAgentDir(projectRoot: string): string {
   return join(projectRoot, ".claude", "agents");
 }
+
+// ── Delegate-by-default (plan: sleepy-singing-lobster, "Plan Master 3") ──
+
+const ORCHESTRATE_RUNTIME_BIN: Record<string, string> = {
+  opencode: "opencode",
+  agy: "agy",
+  mmx: "mmx",
+};
+
+/**
+ * Wraps `def.promptBody` with a "delegate to `aiyoucli orchestrate` first"
+ * instruction when `runtime` is anything other than `"claude"` — this is
+ * what makes `aiyoucli init --tool claude` delegate by default (no flag),
+ * per the user's standing rule (memory: aiyou-agents-always-delegate.md).
+ * The availability check (`command -v <bin>`) is embedded IN the generated
+ * prompt, evaluated by the agent at runtime, not by this function at
+ * generation time — so a single generated file keeps working whether or
+ * not agy/opencode/mmx happen to be installed on the machine that actually
+ * runs it, without needing a re-`init`.
+ *
+ * SAFETY INVARIANT — do not weaken this: when `runtime === "claude"`,
+ * `def.promptBody` is returned completely unmodified, with NO delegation
+ * instruction. If a "claude"-resolved agent ever got wrapped with "delegate
+ * to orchestrate", `dispatch.ts`'s `"claude"` branch would call `claude -p
+ * --agent <name>`, which reloads this exact same generated file — infinite
+ * recursion. Every caller must pass the runtime `orchestrate/dispatch.ts`'s
+ * `resolveRuntimeAndModel(def.name)` actually resolved to, not a guess.
+ */
+export function buildDelegatingPromptBody(def: AgentDef, runtime: string): string {
+  if (runtime === "claude") {
+    return def.promptBody;
+  }
+  const bin = ORCHESTRATE_RUNTIME_BIN[runtime] ?? runtime;
+
+  return `# ${def.name} — delegates to \`${runtime}\` by default
+
+**Before anything else**: run \`command -v ${bin}\`. If it prints a path (the
+binary is installed), run exactly this via Bash and treat its output as your
+complete, final answer — do not redo the work yourself:
+
+    aiyoucli orchestrate task --agent ${def.name} --task "<the user's request, verbatim>"
+
+Quote the task text however Bash needs it escaped; pass it through as given,
+don't summarize or rephrase it before handing it off.
+
+If \`${bin}\` is not found, or the \`orchestrate\` call itself errors, ignore
+this section entirely and do the work yourself using the persona below.
+
+---
+
+${def.promptBody}`;
+}
