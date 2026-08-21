@@ -10,7 +10,7 @@ one up: open a GitHub issue linking back to this entry, ship it, add a
 `CHANGELOG.md` entry under `[Unreleased]`, check it off here. No big-bang
 rewrites — if an item feels like it needs one, split it first.
 
-Last audited against actual source: 2026-08-16.
+Last audited against actual source: 2026-08-20.
 
 ---
 
@@ -25,12 +25,13 @@ missing. They've since shipped — corrected here so nobody re-implements them:
 | Experience replay | `replay_buffer_size` / `replay_buffer_full` in `routing.rs` Q-learning stats |
 | HNSW in memory tools | `enable_hnsw` (default `true`) on `memory_init` / `aiyoucli memory init` |
 | Monitoring / tool-call metrics | `metrics` MCP tool — `action: tools_summary\|latency\|cost\|memory` |
-| AST analyzer | Real tree-sitter (19 languages) via `aiyouvector-codebase`, not regex — `crates/aiyoucli-napi/src/ast.rs` |
+| AST analyzer | Real tree-sitter (18 languages) via `aiyouvector-codebase`, not regex — `crates/aiyoucli-napi/src/ast.rs` |
 | Memory export/import | `aiyoucli memory export`/`memory import`, `memory_export`/`memory_import` MCP tools — shipped 2026-08-16 |
 | Fish/PowerShell completions | `aiyoucli completions fish\|powershell` — shipped 2026-08-16 |
 | `daemon`/`update` real implementations | No longer stubs — `daemon start\|status\|stop` (PID-file based), `update check\|install` — shipped 2026-08-16. Note: the daemon's task queue still has no default producer wired up (`WorkerDaemon.dispatch()` is available for future callers) |
 | `codebase trace --direction callers\|callees` | Fixed 2026-08-16 — was silently returning both directions; see "Confirmed bugs" #1 below for root cause |
 | HNSW index node leak on re-insert | Fixed 2026-08-16 in `aiyouvector-core` (`index/hnsw.rs::add()`) — see "Confirmed bugs" #2 below for root cause |
+| aiyou-team delegation support in Claude Code | Shipped 2026-08-20 (v1.6.3 → v1.7.1): `.claude/agents/*.md` (already existed), `aiyoucli agent set-model` for per-agent model pinning, an A2A protocol server/client (`aiyoucli a2a serve/call`, Claude Code and OpenCode runtimes) so aiyou-team agents are reachable over the network, and `aiyoucli plugin build` packaging the roster + `SessionStart`/`UserPromptSubmit` hooks as a real Claude Code Plugin — all on by default via `aiyoucli init --tool claude` |
 
 ---
 
@@ -84,10 +85,12 @@ writeups worth keeping intact, not gap-doc corrections.
 
 ## Next up (small, low-risk — pick any, one PR each)
 
-Empty right now — the three items that were here (memory export/import, fish/
-powershell completions, real daemon/update) all shipped 2026-08-16, moved to
-"Already done" above. Working the confirmed-bugs list above next; pull further
-batches from "Needs re-verification" below, or from
+- **Deep research (`rd_*`) tools** — decided 2026-08-20, not scoped yet. `src/mcp/tools/rd-tools.ts` (8 tools) is complete but was never registered in `registerAllTools()` — confirmed unreachable via grep. It also depends on a native `aiyoucli-rd` binary that the build pipeline never compiles (`build:rs` only builds `aiyoucli-napi`) and no `npm/*/package.json` ever ships, so registering it as-is would throw for every real user. **Explicit constraint: if this ever gets implemented, fold `rd.rs`'s logic into `aiyoucli-napi` — do not ship a second NAPI crate/binary.** Separately, `src/rd/engine.ts`'s `search()` is a hardcoded stub (`results: []`) — the NAPI consolidation alone doesn't make this feature real; the actual search-result-processing logic still needs writing. Until one of those two things happens, `README.md` does not mention this feature (removed 2026-08-20 — was previously advertised as a live capability).
+
+Otherwise empty right now — the three items that were here (memory export/
+import, fish/powershell completions, real daemon/update) all shipped
+2026-08-16, moved to "Already done" above. Working the confirmed-bugs list
+above next; pull further batches from "Needs re-verification" below, or from
 `docs/RUFLO-V3-VS-AIYOUCLI.md`'s "Media prioridad" table.
 
 ## Needs re-verification before scoping
@@ -102,8 +105,6 @@ confirm current state before treating these as open:
 | Coverage router (route by test-coverage gaps, parse nyc/c8) | Not present as of last check |
 | Hooks: pre/post-edit | Only `pre_task`/`post_task`/`route`/`stats` exist |
 | Init wizard (interactive mode with options) | `init` generates everything directly, no wizard |
-| aiyou-team delegation support in Claude Code | `docs/mcp-tools.md` notes this is owned by the OpenCode plugin and "deferred" for Claude Code; no plan currently on file |
-| Deep research (`rd_*`) tools | `docs/mcp-tools.md` notes these are implemented internally but not registered as MCP tools — needs a decision on what "finish it" means before exposing |
 
 ## Explicitly out of scope (won't do)
 
