@@ -76,11 +76,16 @@ export interface Config {
 
 /**
  * Per-agent overrides — keyed by agent name (`coding-leader`, `reviewer`, ...).
- * Currently only `model` is settable; unset fields fall back to the tier-based
- * default (`modelFromTier` in `init/claude-agents.ts` for Claude Code,
- * `AGENT_MODEL_REQUIREMENTS`-driven auto-selection in aiyou-team for OpenCode).
+ * `model` unset falls back to the tier-based default (`modelFromTier` in
+ * `init/claude-agents.ts` for Claude Code, `AGENT_MODEL_REQUIREMENTS`-driven
+ * auto-selection in aiyou-team for OpenCode). `runtime` unset falls back to
+ * `DEFAULT_ORCHESTRATION` in `orchestrate/defaults.ts` — only consulted by
+ * `aiyoucli orchestrate`, which agent runs which of the three CLI runtimes
+ * (claude/opencode/agy).
  */
-export type AgentsConfig = Record<string, { model?: string }>;
+export type AgentsConfig = Record<string, { model?: string; runtime?: OrchestrationRuntime }>;
+
+export type OrchestrationRuntime = "claude" | "opencode" | "agy";
 
 export interface RoutingConfig {
   default_mode?: string;
